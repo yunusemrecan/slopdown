@@ -37,6 +37,9 @@ final class GlyphConcealer: NSObject, NSLayoutManagerDelegate {
                 }
             }
             guard current != .normal else { continue }
+            // Line breaks and other control characters keep their meaning: hiding a
+            // newline would join two paragraphs.
+            if current == .hidden, props[i].contains(.controlCharacter) { continue }
             if modified == nil { modified = Array(UnsafeBufferPointer(start: props, count: count)) }
             modified![i] = current == .hidden ? .null : .controlCharacter
         }
