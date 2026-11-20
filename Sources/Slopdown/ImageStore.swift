@@ -27,6 +27,8 @@ final class RenderedImage: NSObject {
 /// Remote images are never loaded.
 final class ImageStore {
     static let shared = ImageStore()
+    /// Tallest an image is drawn (also bounds how far above the dirty rect we look).
+    static let maxHeight: CGFloat = 1000
 
     private struct Entry {
         let image: NSImage
@@ -88,6 +90,10 @@ final class ImageStore {
         if w > maxWidth, w > 0 {
             h = h * maxWidth / w
             w = maxWidth
+        }
+        if h > maxHeight, h > 0 {
+            w = w * maxHeight / h
+            h = maxHeight
         }
         return NSSize(width: max(1, w.rounded()), height: max(1, h.rounded()))
     }

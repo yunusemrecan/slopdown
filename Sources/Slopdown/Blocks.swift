@@ -72,7 +72,7 @@ final class TableRowDecoration: NSObject {
 
 final class RenderedEmbed: NSObject {
     static let inset = NSSize(width: 16, height: 10)
-    static let maxHeight: CGFloat = 600
+    static let maxHeight: CGFloat = 900
 
     let text: NSAttributedString
     let textHeight: CGFloat

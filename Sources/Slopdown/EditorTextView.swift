@@ -155,10 +155,14 @@ final class EditorTextView: NSTextView {
 
     // MARK: - Drawing
 
+    /// Characters whose drawing can reach into `rect`. Images and embeds are drawn below
+    /// their line, so lines up to `reach` points above the rect are included.
     private func visibleCharacterRange(in rect: NSRect) -> NSRange? {
         guard let lm = layoutManager, let tc = textContainer else { return nil }
         let origin = textContainerOrigin
-        let r = rect.offsetBy(dx: -origin.x, dy: -origin.y)
+        let reach = ImageStore.maxHeight + 40
+        let r = NSRect(x: rect.minX, y: rect.minY - reach, width: rect.width, height: rect.height + reach)
+            .offsetBy(dx: -origin.x, dy: -origin.y)
         let gr = lm.glyphRange(forBoundingRect: r, in: tc)
         guard gr.length > 0 else { return nil }
         return lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil)
@@ -215,7 +219,7 @@ final class EditorTextView: NSTextView {
         // Embedded notes
         ts.enumerateAttribute(.sdEmbed, in: range) { value, run, _ in
             guard let embed = value as? RenderedEmbed, let box = embedRect(embed, run: run) else { return }
-            Theme.codeBlockBackground.withAlphaComponent(0.12).setFill()
+            Theme.codeBlockBackground.setFill()
             NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
             NSColor.controlAccentColor.withAlphaComponent(0.6).setFill()
             NSRect(x: box.minX, y: box.minY, width: 3, height: box.height).fill(using: .sourceOver)
@@ -266,7 +270,7 @@ final class EditorTextView: NSTextView {
         let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
         let origin = textContainerOrigin
         let h = embed.boxHeight
-        return NSRect(x: origin.x + frag.minX + tc.lineFragmentPadding, y: origin.y + frag.maxY - h - 8,
+        return NSRect(x: origin.x + frag.minX + tc.lineFragmentPadding, y: origin.y + frag.maxY + 4,
                       width: tc.size.width - 2 * tc.lineFragmentPadding, height: h)
     }
 
@@ -292,11 +296,11 @@ final class EditorTextView: NSTextView {
             guard let img = value as? RenderedImage, run.length > 0 else { return }
             let g = lm.glyphIndexForCharacter(at: NSMaxRange(run) - 1)
             guard g < lm.numberOfGlyphs else { return }
-            // The styler reserved `height + 12` of paragraph spacing at the bottom of this
-            // line fragment; draw the image into that space.
+            // The styler reserved `height + 12` of paragraph spacing below this line
+            // (the line fragment rect itself does not include it); draw into that space.
             let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
             let r = NSRect(x: origin.x + frag.minX + tc.lineFragmentPadding,
-                           y: origin.y + frag.maxY - img.size.height - 8,
+                           y: origin.y + frag.maxY + 4,
                            width: img.size.width, height: img.size.height)
             guard r.intersects(dirtyRect) else { return }
             img.image.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1,

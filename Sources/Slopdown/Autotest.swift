@@ -62,6 +62,17 @@ enum Autotest {
                 lm.enumerateLineFragments(forGlyphRange: gr) { rect, _, _, _, _ in rects.append("\(Int(rect.minY))-\(Int(rect.maxY))") }
                 log("\(base): codeBlock run \(r) lines \(rects)")
             }
+            for key in [NSAttributedString.Key.sdTable, .sdImage, .sdEmbed] {
+                ts.enumerateAttribute(key, in: NSRange(location: 0, length: ts.length)) { v, r, _ in
+                    guard v != nil else { return }
+                    let gr = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+                    var rects: [String] = []
+                    lm.enumerateLineFragments(forGlyphRange: gr) { rect, used, _, g, _ in
+                        rects.append("frag \(Int(rect.minY))-\(Int(rect.maxY)) used \(Int(used.minY))-\(Int(used.maxY)) glyphs \(g)")
+                    }
+                    log("\(base): \(key.rawValue) \(r) \(rects)")
+                }
+            }
             log("\(base): elements \(editor.styler.elements.count), used height \(Int(lm.usedRect(for: tv.textContainer!).height))")
         }
 

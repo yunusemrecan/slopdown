@@ -62,8 +62,14 @@ enum Theme {
     static var secondaryColor: NSColor { .secondaryLabelColor }
     static var linkColor: NSColor { .linkColor }
     static var unresolvedLinkColor: NSColor { NSColor.linkColor.withAlphaComponent(0.55) }
-    static var inlineCodeBackground: NSColor { NSColor.quaternaryLabelColor.withAlphaComponent(0.35) }
-    static var codeBlockBackground: NSColor { NSColor.quaternaryLabelColor.withAlphaComponent(0.25) }
+    static let inlineCodeBackground = NSColor(name: "sd.inlineCode") { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1, alpha: 0.10) : NSColor(white: 0, alpha: 0.06)
+    }
+    static let codeBlockBackground = NSColor(name: "sd.codeBlock") { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.035)
+    }
     static var quoteBar: NSColor { .tertiaryLabelColor }
 }
 #endif
