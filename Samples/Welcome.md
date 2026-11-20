@@ -28,9 +28,29 @@ Move the caret around: markdown syntax only shows up for the element you are on.
 
 ---
 
-## Image
+## Images
 
 ![[inkwell.png|320]]
+
+Inline images sit in the text: ![[inkwell.png|48]] like this, ![dot|24](attachments/inkwell.png) or this.
+
+## Table
+
+| Drug | Dose | Route |
+|:--|:-:|--:|
+| **Paracetamol** | 15 mg/kg | PO |
+| Mannitol | 0.5–1 g/kg | IV |
+| `code` and [[Second Note\|links]] | — | — |
+
+## Embeds
+
+A whole note:
+
+![[Second Note]]
+
+One section of it:
+
+![[Second Note#Details]]
 
 ## Code
 

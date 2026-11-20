@@ -8,6 +8,8 @@
     <string>Slopdown</string>
     <key>CFBundleExecutable</key>
     <string>Slopdown</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>io.github.yunusemrecan.slopdown</string>
     <key>CFBundleInfoDictionaryVersion</key>

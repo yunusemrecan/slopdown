@@ -38,6 +38,7 @@ BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
 sed -e "s/@VERSION@/$VERSION/" -e "s/@BUILD@/$BUILD_NUMBER/" \
     "$ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+iconutil -c icns "$ROOT/Resources/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
 
 echo "==> Ad-hoc signing"
 codesign --force --sign - --timestamp=none "$APP"

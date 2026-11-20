@@ -42,16 +42,14 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF#refs/tags/v}"; fi
           SLOPDOWN_VERSION="$VERSION" scripts/build_app.sh --arch arm64
 
-      - name: Launch check (opens the sample note, takes a screenshot)
+      - name: Visual autotest (renders sample notes to PNG)
         run: |
-          set +e
-          open -a "$PWD/dist/Slopdown.app" "$PWD/Samples/Welcome.md"
-          sleep 8
           mkdir -p screenshots
-          screencapture -x screenshots/welcome.png
-          pgrep -x Slopdown >/dev/null || { echo "App is not running"; exit 1; }
-          pkill -x Slopdown
-          exit 0
+          SLOPDOWN_AUTOTEST="$PWD/Samples/Welcome.md:$PWD/Samples/notes/Second Note.md" \
+          SLOPDOWN_AUTOTEST_OUT="$PWD/screenshots" \
+            perl -e 'alarm 150; exec @ARGV' dist/Slopdown.app/Contents/MacOS/Slopdown
+          ls screenshots
+          test -f screenshots/Welcome-0.png || { echo "No screenshots written"; exit 1; }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

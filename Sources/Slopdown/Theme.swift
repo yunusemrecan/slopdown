@@ -18,6 +18,15 @@ extension NSAttributedString.Key {
     static let sdQuote = NSAttributedString.Key("sd.quote")
     /// Code block / frontmatter background (value: true).
     static let sdCodeBlock = NSAttributedString.Key("sd.codeBlock")
+    /// A table `|` laid out as a tab (value: true).
+    static let sdTabPipe = NSAttributedString.Key("sd.tabPipe")
+    /// Table row decoration: grid lines, header background (value: TableRowDecoration).
+    static let sdTable = NSAttributedString.Key("sd.table")
+    /// First character of an inline image; laid out as a box of the image's size
+    /// (value: RenderedImage). The rest of the image syntax is hidden.
+    static let sdInlineImage = NSAttributedString.Key("sd.inlineImage")
+    /// Embedded note drawn below the line (value: RenderedEmbed).
+    static let sdEmbed = NSAttributedString.Key("sd.embed")
 }
 
 enum Theme {

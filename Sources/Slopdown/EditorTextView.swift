@@ -4,8 +4,11 @@
 import AppKit
 
 /// Lays out characters marked `.sdHidden` as null glyphs: they stay in the text (and in
-/// the file) but take no space and are not drawn.
+/// the file) but take no space and are not drawn. Table pipes become tabs and the first
+/// character of an inline image becomes a box of the image's size.
 final class GlyphConcealer: NSObject, NSLayoutManagerDelegate {
+    private enum Treatment { case normal, hidden, control }
+
     func layoutManager(_ layoutManager: NSLayoutManager,
                        shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
                        properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
@@ -16,25 +19,26 @@ final class GlyphConcealer: NSObject, NSLayoutManagerDelegate {
         let count = glyphRange.length
         let length = storage.length
         var modified: [NSLayoutManager.GlyphProperty]? = nil
-        var hiddenUntil = -1      // end of the last hidden run found
-        var visibleUntil = -1     // end of the last visible run found
+        var runEnd = -1
+        var current = Treatment.normal
         for i in 0..<count {
             let ci = charIndexes[i]
             guard ci < length else { continue }
-            var hidden: Bool
-            if ci < hiddenUntil {
-                hidden = true
-            } else if ci < visibleUntil {
-                hidden = false
-            } else {
+            if ci >= runEnd {
                 var run = NSRange()
-                hidden = storage.attribute(.sdHidden, at: ci, effectiveRange: &run) != nil
-                if hidden { hiddenUntil = NSMaxRange(run) } else { visibleUntil = NSMaxRange(run) }
+                let attrs = storage.attributes(at: ci, effectiveRange: &run)
+                runEnd = NSMaxRange(run)
+                if attrs[.sdHidden] != nil {
+                    current = .hidden
+                } else if attrs[.sdTabPipe] != nil || attrs[.sdInlineImage] != nil {
+                    current = .control
+                } else {
+                    current = .normal
+                }
             }
-            if hidden {
-                if modified == nil { modified = Array(UnsafeBufferPointer(start: props, count: count)) }
-                modified![i] = .null
-            }
+            guard current != .normal else { continue }
+            if modified == nil { modified = Array(UnsafeBufferPointer(start: props, count: count)) }
+            modified![i] = current == .hidden ? .null : .controlCharacter
         }
         guard let newProps = modified else { return 0 }
         newProps.withUnsafeBufferPointer { buf in
@@ -42,6 +46,27 @@ final class GlyphConcealer: NSObject, NSLayoutManagerDelegate {
                                     font: aFont, forGlyphRange: glyphRange)
         }
         return count
+    }
+
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       shouldUse action: NSLayoutManager.ControlCharacterAction,
+                       forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
+        guard let storage = layoutManager.textStorage, charIndex < storage.length else { return action }
+        if storage.attribute(.sdTabPipe, at: charIndex, effectiveRange: nil) != nil { return .horizontalTab }
+        if storage.attribute(.sdInlineImage, at: charIndex, effectiveRange: nil) != nil { return .whitespace }
+        return action
+    }
+
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       boundingBoxForControlGlyphAt glyphIndex: Int,
+                       for textContainer: NSTextContainer,
+                       proposedLineFragment proposedRect: NSRect,
+                       glyphPosition: NSPoint,
+                       characterIndex charIndex: Int) -> NSRect {
+        guard let storage = layoutManager.textStorage, charIndex < storage.length,
+              let img = storage.attribute(.sdInlineImage, at: charIndex, effectiveRange: nil) as? RenderedImage
+        else { return NSRect(origin: glyphPosition, size: .zero) }
+        return NSRect(x: 0, y: 0, width: img.size.width + 2, height: img.size.height)
     }
 }
 
@@ -92,6 +117,11 @@ final class EditorTextView: NSTextView {
                 editor.follow(link)
                 return
             }
+            if event.modifierFlags.contains(.command), let run = embedRun(at: p),
+               let embed = editor.styler.elements.first(where: { $0.link != nil && $0.range.containsIndex(run.location) }) {
+                editor.follow(embed)
+                return
+            }
             if event.clickCount == 1,
                event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
                let task = editor.taskElement(at: p) {
@@ -116,7 +146,7 @@ final class EditorTextView: NSTextView {
     private func updateCursor(at p: NSPoint, flags: NSEvent.ModifierFlags) {
         guard let editor, bounds.contains(p) else { return }
         if editor.taskElement(at: p) != nil
-            || (flags.contains(.command) && editor.linkElement(at: p) != nil) {
+            || (flags.contains(.command) && (editor.linkElement(at: p) != nil || embedRun(at: p) != nil)) {
             NSCursor.pointingHand.set()
         } else if flags.contains(.command) {
             NSCursor.iBeam.set()
@@ -162,7 +192,7 @@ final class EditorTextView: NSTextView {
         ts.enumerateAttribute(.sdCodeBlock, in: range) { value, run, _ in
             guard value != nil else { return }
             for r in lineRects(for: run) {
-                NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
+                NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill(using: .sourceOver)
             }
         }
 
@@ -170,9 +200,85 @@ final class EditorTextView: NSTextView {
         ts.enumerateAttribute(.sdQuote, in: range) { value, run, _ in
             guard value != nil else { return }
             for r in lineRects(for: run) {
-                NSRect(x: r.minX + 4, y: r.minY, width: 3, height: r.height).fill()
+                NSRect(x: r.minX + 4, y: r.minY, width: 3, height: r.height).fill(using: .sourceOver)
             }
         }
+
+        // Tables: header background and grid
+        ts.enumerateAttribute(.sdTable, in: range) { value, run, _ in
+            guard let deco = value as? TableRowDecoration else { return }
+            for r in lineRects(for: run) {
+                drawTableRow(deco, in: r)
+            }
+        }
+
+        // Embedded notes
+        ts.enumerateAttribute(.sdEmbed, in: range) { value, run, _ in
+            guard let embed = value as? RenderedEmbed, let box = embedRect(embed, run: run) else { return }
+            Theme.codeBlockBackground.withAlphaComponent(0.12).setFill()
+            NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
+            NSColor.controlAccentColor.withAlphaComponent(0.6).setFill()
+            NSRect(x: box.minX, y: box.minY, width: 3, height: box.height).fill(using: .sourceOver)
+            let textRect = NSRect(x: box.minX + RenderedEmbed.inset.width, y: box.minY + RenderedEmbed.inset.height,
+                                  width: box.width - RenderedEmbed.inset.width * 2,
+                                  height: box.height - RenderedEmbed.inset.height * 2)
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: textRect).addClip()
+            embed.text.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
+    private func drawTableRow(_ deco: TableRowDecoration, in r: NSRect) {
+        guard let tc = textContainer else { return }
+        let x0 = r.minX + tc.lineFragmentPadding
+        let width = deco.layout.totalWidth
+        if deco.isHeader {
+            Theme.codeBlockBackground.setFill()
+            NSRect(x: x0, y: r.minY, width: width, height: r.height).fill(using: .sourceOver)
+        }
+        NSColor.separatorColor.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1
+        if deco.isHeader {
+            path.move(to: NSPoint(x: x0, y: r.minY + 0.5))
+            path.line(to: NSPoint(x: x0 + width, y: r.minY + 0.5))
+        }
+        if !deco.isDelimiter {
+            path.move(to: NSPoint(x: x0, y: r.maxY - 0.5))
+            path.line(to: NSPoint(x: x0 + width, y: r.maxY - 0.5))
+        }
+        var x = x0
+        for w in [0] + deco.layout.columnWidths {
+            x += CGFloat(w)
+            let xx = floor(x) + 0.5
+            path.move(to: NSPoint(x: xx, y: r.minY))
+            path.line(to: NSPoint(x: xx, y: r.maxY))
+        }
+        path.stroke()
+    }
+
+    /// Box of an embedded note, in the paragraph spacing reserved below its line.
+    func embedRect(_ embed: RenderedEmbed, run: NSRange) -> NSRect? {
+        guard let lm = layoutManager, let tc = textContainer, run.length > 0 else { return nil }
+        let g = lm.glyphIndexForCharacter(at: NSMaxRange(run) - 1)
+        guard g < lm.numberOfGlyphs else { return nil }
+        let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+        let origin = textContainerOrigin
+        let h = embed.boxHeight
+        return NSRect(x: origin.x + frag.minX + tc.lineFragmentPadding, y: origin.y + frag.maxY - h - 8,
+                      width: tc.size.width - 2 * tc.lineFragmentPadding, height: h)
+    }
+
+    /// Character range of the embed whose box contains the point.
+    func embedRun(at point: NSPoint) -> NSRange? {
+        guard let ts = textStorage, let range = visibleCharacterRange(in: visibleRect) else { return nil }
+        var hit: NSRange?
+        ts.enumerateAttribute(.sdEmbed, in: range) { value, run, stop in
+            guard let embed = value as? RenderedEmbed, let box = embedRect(embed, run: run) else { return }
+            if box.contains(point) { hit = run; stop.pointee = true }
+        }
+        return hit
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -191,6 +297,20 @@ final class EditorTextView: NSTextView {
             let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
             let r = NSRect(x: origin.x + frag.minX + tc.lineFragmentPadding,
                            y: origin.y + frag.maxY - img.size.height - 8,
+                           width: img.size.width, height: img.size.height)
+            guard r.intersects(dirtyRect) else { return }
+            img.image.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1,
+                           respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high.rawValue])
+        }
+
+        // Inline images: drawn into the box laid out for their first character
+        ts.enumerateAttribute(.sdInlineImage, in: range) { value, run, _ in
+            guard let img = value as? RenderedImage else { return }
+            let g = lm.glyphIndexForCharacter(at: run.location)
+            guard g < lm.numberOfGlyphs else { return }
+            let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+            let loc = lm.location(forGlyphAt: g)
+            let r = NSRect(x: origin.x + frag.minX + loc.x + 1, y: origin.y + frag.minY + loc.y - img.size.height,
                            width: img.size.width, height: img.size.height)
             guard r.intersects(dirtyRect) else { return }
             img.image.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1,

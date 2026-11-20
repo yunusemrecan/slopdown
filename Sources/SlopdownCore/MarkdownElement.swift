@@ -42,6 +42,28 @@ public struct MDImage: Equatable {
     public var targetRange: NSRange
 }
 
+public enum MDAlignment: Equatable {
+    case left, center, right
+}
+
+/// One line of a pipe table.
+public struct MDTableRow: Equatable {
+    /// Range of the whole table (all lines); identifies the table.
+    public var table: NSRange
+    public var rowIndex: Int          // 0 = header; the delimiter row is not counted
+    public var isHeader: Bool { rowIndex == 0 }
+    public var isLast: Bool
+    /// Every `|` that separates cells (not escaped, not inside code or wiki links).
+    public var pipes: [NSRange]
+    /// True when the row starts / ends with a pipe.
+    public var leadingPipe: Bool
+    public var trailingPipe: Bool
+    /// Trimmed cell contents, left to right.
+    public var cells: [NSRange]
+    /// Column alignments from the delimiter row.
+    public var alignments: [MDAlignment]
+}
+
 public struct MDElement: Equatable {
     public enum Kind: Equatable {
         // Block level (one element per line)
@@ -54,6 +76,8 @@ public struct MDElement: Equatable {
         case codeFence
         case codeLine
         case frontmatter
+        case tableRow(MDTableRow)
+        case tableDelimiter(MDTableRow)
         // Inline
         case bold
         case italic
@@ -80,7 +104,7 @@ public struct MDElement: Equatable {
     public var isBlock: Bool {
         switch kind {
         case .heading, .blockquote, .bulletItem, .orderedItem, .task, .rule,
-             .codeFence, .codeLine, .frontmatter:
+             .codeFence, .codeLine, .frontmatter, .tableRow, .tableDelimiter:
             return true
         default:
             return false
@@ -90,6 +114,13 @@ public struct MDElement: Equatable {
     public var link: MDLink? {
         if case .link(let l) = kind { return l }
         return nil
+    }
+
+    public var tableRow: MDTableRow? {
+        switch kind {
+        case .tableRow(let r), .tableDelimiter(let r): return r
+        default: return nil
+        }
     }
 
     public var image: MDImage? {

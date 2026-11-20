@@ -58,6 +58,10 @@ public enum MarkdownParser {
                 out.append(block(.codeFence, line))
                 continue
             }
+            if let next = parseTable(text, ns, lines, i - 1, into: &out) {
+                i = next
+                continue
+            }
 
             parseLine(text, ns, line, into: &out)
         }
@@ -104,6 +108,136 @@ public enum MarkdownParser {
         let run = trimmed.prefix(while: { $0 == f.char }).count
         guard run >= f.count else { return false }
         return trimmed.dropFirst(run).allSatisfy { $0 == " " || $0 == "\t" }
+    }
+
+    // MARK: - Tables
+
+    private static let delimiterCellRE = re(#"^[ \t]*:?-+:?[ \t]*$"#)
+
+    struct RowSplit {
+        var pipes: [NSRange]       // all unescaped separator pipes, in order
+        var leading: Bool
+        var trailing: Bool
+        var cells: [NSRange]       // trimmed
+        var inner: [NSRange]       // pipes between cells
+    }
+
+    /// Splits a table line on `|`, ignoring `\|`, pipes in code spans and in `[[…]]`.
+    static func splitRow(_ ns: NSString, _ line: NSRange) -> RowSplit? {
+        var pipes: [Int] = []
+        var i = line.location
+        let end = NSMaxRange(line)
+        var codeRun = 0          // length of the backtick run that opened a code span
+        var wikiDepth = 0
+        while i < end {
+            let c = ns.character(at: i)
+            if c == 0x5C /* \ */ { i += 2; continue }
+            if c == 0x60 /* ` */ {
+                var j = i
+                while j < end, ns.character(at: j) == 0x60 { j += 1 }
+                let run = j - i
+                if codeRun == 0 { codeRun = run } else if run == codeRun { codeRun = 0 }
+                i = j
+                continue
+            }
+            if codeRun == 0 {
+                if c == 0x5B, i + 1 < end, ns.character(at: i + 1) == 0x5B { wikiDepth += 1; i += 2; continue }
+                if c == 0x5D, i + 1 < end, ns.character(at: i + 1) == 0x5D, wikiDepth > 0 { wikiDepth -= 1; i += 2; continue }
+                if c == 0x7C, wikiDepth == 0 { pipes.append(i) }
+            }
+            i += 1
+        }
+        guard !pipes.isEmpty else { return nil }
+
+        func isSpace(_ k: Int) -> Bool { let c = ns.character(at: k); return c == 0x20 || c == 0x09 }
+        var firstNonSpace = line.location
+        while firstNonSpace < end, isSpace(firstNonSpace) { firstNonSpace += 1 }
+        var lastNonSpace = end - 1
+        while lastNonSpace >= line.location, isSpace(lastNonSpace) { lastNonSpace -= 1 }
+        let leading = pipes.first == firstNonSpace
+        let trailing = pipes.last == lastNonSpace && !(leading && pipes.count == 1)
+
+        var segStart = leading ? pipes[0] + 1 : line.location
+        var innerPipes = pipes
+        if leading { innerPipes.removeFirst() }
+        if trailing, !innerPipes.isEmpty { innerPipes.removeLast() }
+        var cells: [NSRange] = []
+        for p in innerPipes + [trailing ? pipes.last! : end] {
+            var a = segStart, b = p
+            while a < b, isSpace(a) { a += 1 }
+            while b > a, isSpace(b - 1) { b -= 1 }
+            cells.append(NSRange(location: a, length: b - a))
+            segStart = p + 1
+        }
+        return RowSplit(pipes: pipes.map { NSRange(location: $0, length: 1) }, leading: leading, trailing: trailing,
+                        cells: cells, inner: innerPipes.map { NSRange(location: $0, length: 1) })
+    }
+
+    /// A table starts with a header row followed by a delimiter row (`| --- | :-: |`)
+    /// with the same number of cells. Returns the index of the first line after it.
+    private static func parseTable(_ str: String, _ ns: NSString, _ lines: [NSRange], _ start: Int,
+                                   into out: inout [MDElement]) -> Int? {
+        guard start + 1 < lines.count,
+              let header = splitRow(ns, lines[start]),
+              let delim = splitRow(ns, lines[start + 1]),
+              header.cells.count == delim.cells.count,
+              delim.cells.allSatisfy({ $0.length > 0 && delimiterCellRE.firstMatch(in: str, options: [], range: $0) != nil })
+        else { return nil }
+
+        let alignments: [MDAlignment] = delim.cells.map {
+            let t = ns.substring(with: $0)
+            let l = t.hasPrefix(":"), r = t.hasSuffix(":")
+            return l && r ? .center : (r ? .right : .left)
+        }
+
+        var rows: [(line: NSRange, split: RowSplit)] = [(lines[start], header)]
+        var end = start + 2
+        while end < lines.count {
+            let l = lines[end]
+            guard !ns.substring(with: l).trimmingCharacters(in: .whitespaces).isEmpty,
+                  let split = splitRow(ns, l) else { break }
+            rows.append((l, split))
+            end += 1
+        }
+        let tableRange = NSRange(location: lines[start].location,
+                                 length: NSMaxRange(lines[end - 1]) - lines[start].location)
+
+        func hidden(_ line: NSRange, keep: [NSRange]) -> [NSRange] {
+            var result: [NSRange] = []
+            var pos = line.location
+            for k in keep.sorted(by: { $0.location < $1.location }) where k.location >= pos {
+                if k.location > pos { result.append(NSRange(location: pos, length: k.location - pos)) }
+                pos = NSMaxRange(k)
+            }
+            if pos < NSMaxRange(line) { result.append(NSRange(location: pos, length: NSMaxRange(line) - pos)) }
+            return result
+        }
+
+        // Delimiter row: hidden entirely while the table is rendered.
+        let delimRow = MDTableRow(table: tableRange, rowIndex: -1, isLast: false, pipes: delim.inner,
+                                  leadingPipe: delim.leading, trailingPipe: delim.trailing,
+                                  cells: delim.cells, alignments: alignments)
+
+        for (n, row) in rows.enumerated() {
+            let r = MDTableRow(table: tableRange, rowIndex: n, isLast: n == rows.count - 1,
+                               pipes: row.split.inner, leadingPipe: row.split.leading,
+                               trailingPipe: row.split.trailing, cells: row.split.cells,
+                               alignments: alignments)
+            var e = block(.tableRow(r), row.line)
+            e.revealRange = tableRange
+            e.hidden = hidden(row.line, keep: row.split.cells.filter { $0.length > 0 } + row.split.inner)
+            out.append(e)
+            for cell in row.split.cells where cell.length > 0 {
+                parseInline(str, ns, cell, line: row.line, into: &out)
+            }
+            if n == 0 {
+                var d = block(.tableDelimiter(delimRow), lines[start + 1])
+                d.revealRange = tableRange
+                d.hidden = [lines[start + 1]]
+                out.append(d)
+            }
+        }
+        return end
     }
 
     // MARK: - Block prefixes
@@ -324,7 +458,9 @@ public enum MarkdownParser {
             String(utf16CodeUnits: Array(u[a..<b]), count: b - a)
         }
         let rawPath = sub(0, pathLen)
-        let trimmedPath = rawPath.trimmingCharacters(in: .whitespaces)
+        var trimmedPath = rawPath.trimmingCharacters(in: .whitespaces)
+        // Inside tables Obsidian writes the alias separator as "\|".
+        if trimmedPath.hasSuffix("\\") { trimmedPath = String(trimmedPath.dropLast()).trimmingCharacters(in: .whitespaces) }
         var parts = WikiParts(
             path: trimmedPath,
             pathRange: NSRange(location: inner.location, length: pathLen),

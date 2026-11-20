@@ -13,6 +13,8 @@ final class MarkdownStyler {
     /// Indexes of elements whose markdown syntax is currently shown.
     var revealed: Set<Int> = []
     var sourceMode = false
+    /// Render `![[Note]]` contents (off inside an embed, so embeds don't nest).
+    var allowEmbeds = true
     var baseDirectory: URL?
     /// Usable text width (for image sizing).
     var textWidth: CGFloat = Theme.readableWidth
@@ -45,6 +47,7 @@ final class MarkdownStyler {
         guard range.length > 0 else { return }
 
         let scratch = NSMutableAttributedString(string: storage.string)
+        tableLayouts = [:]
         scratch.setAttributes(Theme.baseAttributes(sourceMode: sourceMode), range: range)
         if sourceMode {
             for e in elements where e.range.overlaps(range) || paragraphTouches(e, range) {
@@ -191,14 +194,95 @@ final class MarkdownStyler {
             set(storage, [.font: Theme.monoFont, .backgroundColor: Theme.inlineCodeBackground], e.content, clip: clip)
             hideOrDim(e, revealed: revealed, storage, clip: clip)
 
+        case .tableRow(let row):
+            guard !revealed, let layout = tableLayout(for: row, storage) else {
+                for p in row.pipes { set(storage, [.foregroundColor: Theme.syntaxColor], p, clip: clip) }
+                for h in e.hidden { set(storage, [.foregroundColor: Theme.syntaxColor], h, clip: clip) }
+                return
+            }
+            let p = NSMutableParagraphStyle()
+            p.setParagraphStyle(Theme.paragraph)
+            p.lineSpacing = 5
+            p.paragraphSpacingBefore = 4
+            p.firstLineHeadIndent = TableLayout.padding
+            p.headIndent = TableLayout.padding
+            p.tabStops = layout.tabStops
+            p.defaultTabInterval = 10_000
+            set(storage, [.paragraphStyle: p,
+                          .sdTable: TableRowDecoration(layout: layout, isHeader: row.isHeader, isDelimiter: false)],
+                lineWithBreak(e.range, storage), clip: clip)
+            if row.isHeader {
+                for c in row.cells { addTrait(storage, .boldFontMask, c, clip: clip) }
+            }
+            for h in e.hidden { set(storage, [.sdHidden: true], h, clip: clip) }
+            for pipe in row.pipes { set(storage, [.sdTabPipe: true, .foregroundColor: NSColor.clear], pipe, clip: clip) }
+
+        case .tableDelimiter(let row):
+            guard !revealed, let layout = tableLayout(for: row, storage) else {
+                set(storage, [.foregroundColor: Theme.syntaxColor], e.range, clip: clip)
+                return
+            }
+            let p = NSMutableParagraphStyle()
+            p.minimumLineHeight = 1
+            p.maximumLineHeight = 1
+            set(storage, [.sdHidden: true, .font: NSFont.systemFont(ofSize: 1), .paragraphStyle: p,
+                          .sdTable: TableRowDecoration(layout: layout, isHeader: false, isDelimiter: true)],
+                lineWithBreak(e.range, storage), clip: clip)
+
+        case .link(let link) where link.style == .embed && allowEmbeds && !link.target.isEmpty:
+            guard isAloneOnLine(e, storage), let base = baseDirectory,
+                  let url = resolutions.resolve(link.target, base: base), LinkResolver.isMarkdownFile(url),
+                  let embed = EmbedStore.shared.embed(url, heading: link.heading,
+                                                      width: max(100, textWidth - RenderedEmbed.inset.width * 2)) else {
+                styleLink(e, link, revealed: revealed, storage, clip: clip)
+                return
+            }
+            if revealed {
+                styleLink(e, link, revealed: true, storage, clip: clip)
+            } else {
+                set(storage, [.sdHidden: true], e.range, clip: clip)
+            }
+            let p = NSMutableParagraphStyle()
+            p.setParagraphStyle(Theme.paragraph)
+            p.paragraphSpacing = embed.boxHeight + 12
+            set(storage, [.paragraphStyle: p, .sdEmbed: embed], e.range, clip: clip)
+
         case .link(let link):
+            styleLink(e, link, revealed: revealed, storage, clip: clip)
+
+        case .image(let img) where img.standalone:
+            styleBlockImage(e, img, revealed: revealed, storage, clip: clip)
+
+        case .image(let img):
+            guard !revealed, !img.isRemote, let base = baseDirectory,
+                  let url = img.isWiki ? resolutions.resolve(img.source, base: base)
+                                       : resolveMarkdownImage(img.source, base: base),
+                  let loaded = ImageStore.shared.image(at: url), e.range.length > 1 else {
+                set(storage, [.foregroundColor: revealed ? Theme.syntaxColor : Theme.secondaryColor], e.range, clip: clip)
+                return
+            }
+            let size = ImageStore.displaySize(natural: loaded.naturalSize, width: img.width,
+                                              height: img.height, maxWidth: textWidth)
+            let first = NSRange(location: e.range.location, length: 1)
+            let rest = NSRange(location: e.range.location + 1, length: e.range.length - 1)
+            set(storage, [.sdInlineImage: RenderedImage(image: loaded.image, size: size),
+                          .foregroundColor: NSColor.clear], first, clip: clip)
+            set(storage, [.sdHidden: true], rest, clip: clip)
+        }
+    }
+
+    private func styleLink(_ e: MDElement, _ link: MDLink, revealed: Bool, _ storage: NSMutableAttributedString, clip: NSRange) {
+        do {
             let color = isResolved(link) ? Theme.linkColor : Theme.unresolvedLinkColor
             set(storage, [.foregroundColor: color,
                           .underlineStyle: NSUnderlineStyle.single.rawValue,
                           .underlineColor: color.withAlphaComponent(0.35)], e.content, clip: clip)
             hideOrDim(e, revealed: revealed, storage, clip: clip)
+        }
+    }
 
-        case .image(let img):
+    private func styleBlockImage(_ e: MDElement, _ img: MDImage, revealed: Bool, _ storage: NSMutableAttributedString, clip: NSRange) {
+        do {
             guard img.standalone, !img.isRemote, let base = baseDirectory,
                   let url = img.isWiki ? resolutions.resolve(img.source, base: base)
                                        : resolveMarkdownImage(img.source, base: base),
@@ -238,11 +322,60 @@ final class MarkdownStyler {
         case .task:
             set(storage, [.foregroundColor: Theme.secondaryColor], e.marker, clip: clip)
             for h in e.hidden { set(storage, [.foregroundColor: Theme.secondaryColor], h, clip: clip) }
-        case .rule, .image:
+        case .rule, .image, .tableDelimiter:
             set(storage, [.foregroundColor: Theme.syntaxColor], e.range, clip: clip)
+        case .tableRow(let row):
+            for p in row.pipes { set(storage, [.foregroundColor: Theme.syntaxColor], p, clip: clip) }
+            for h in e.hidden { set(storage, [.foregroundColor: Theme.syntaxColor], h, clip: clip) }
         default:
             for h in e.hidden { set(storage, [.foregroundColor: Theme.syntaxColor], h, clip: clip) }
         }
+    }
+
+    // MARK: - Tables
+
+    private var tableLayouts: [Int: TableLayout?] = [:]
+
+    /// Column widths from the visible cell text; nil when the table is wider than the
+    /// text column (then it stays as plain markdown).
+    private func tableLayout(for row: MDTableRow, _ storage: NSMutableAttributedString) -> TableLayout? {
+        let key = row.table.location
+        if let cached = tableLayouts[key] { return cached }
+        let ns = storage.string as NSString
+        let rows = elements.compactMap { e -> MDTableRow? in
+            if case .tableRow(let r) = e.kind, r.table == row.table { return r }
+            return nil
+        }
+        var hidden = IndexSet()
+        for e in elements where !e.isBlock && row.table.containsIndex(e.range.location) {
+            for h in e.hidden { hidden.insert(integersIn: h.location..<NSMaxRange(h)) }
+        }
+        let columns = row.alignments.count
+        var widths = [CGFloat](repeating: 0, count: columns)
+        let bold = NSFontManager.shared.convert(Theme.bodyFont, toHaveTrait: .boldFontMask)
+        for r in rows {
+            let font = r.isHeader ? bold : Theme.bodyFont
+            for (c, cell) in r.cells.enumerated() where c < columns && cell.length > 0 {
+                var visible: [unichar] = []
+                for k in cell.location..<NSMaxRange(cell) where !hidden.contains(k) { visible.append(ns.character(at: k)) }
+                let text = String(utf16CodeUnits: visible, count: visible.count)
+                let w = (text as NSString).size(withAttributes: [.font: font]).width
+                widths[c] = max(widths[c], ceil(w) + 4)
+            }
+        }
+        let layout = TableLayout(columnWidths: widths.map { max($0, 16) + 2 * TableLayout.padding },
+                                 alignments: row.alignments)
+        let result: TableLayout? = layout.totalWidth <= textWidth ? layout : nil
+        tableLayouts[key] = result
+        return result
+    }
+
+    private func isAloneOnLine(_ e: MDElement, _ storage: NSMutableAttributedString) -> Bool {
+        let ns = storage.string as NSString
+        let line = ns.lineRange(for: e.range)
+        let before = ns.substring(with: NSRange(location: line.location, length: e.range.location - line.location))
+        let after = ns.substring(with: NSRange(location: NSMaxRange(e.range), length: NSMaxRange(line) - NSMaxRange(e.range)))
+        return before.trimmingCharacters(in: .whitespaces).isEmpty && after.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Links

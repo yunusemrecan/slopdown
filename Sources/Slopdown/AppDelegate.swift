@@ -12,7 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.mainMenu = buildMainMenu()
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { true }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if Autotest.isActive { Autotest.run() }
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { !Autotest.isActive }
 
     // MARK: - Menu
 

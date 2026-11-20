@@ -225,3 +225,43 @@ final class LinkResolverTests: XCTestCase {
         XCTAssertEqual(LinkResolver.linkTarget(for: far, relativeTo: base, wikiStyle: false), "deep/Far%20Note.md")
     }
 }
+
+final class TableTests: XCTestCase {
+    private func sub(_ text: String, _ r: NSRange) -> String { NSString(string: text).substring(with: r) }
+
+    func testTable() {
+        let t = "| Name | Dose `a|b` | [[x|y]] |\n|:--|:-:|--:|\n| **A** | 5 mg | z |\nb | c\n\nafter"
+        let els = MarkdownParser.parse(t)
+        let rows = els.compactMap { e -> MDTableRow? in if case .tableRow(let r) = e.kind { return r }; return nil }
+        XCTAssertEqual(rows.count, 3)
+        XCTAssertEqual(rows[0].cells.map { sub(t, $0) }, ["Name", "Dose `a|b`", "[[x|y]]"])
+        XCTAssertEqual(rows[0].alignments, [.left, .center, .right])
+        XCTAssertEqual(rows[0].pipes.count, 2)
+        XCTAssertTrue(rows[0].leadingPipe && rows[0].trailingPipe)
+        XCTAssertEqual(rows[1].cells.map { sub(t, $0) }, ["**A**", "5 mg", "z"])
+        XCTAssertEqual(rows[2].cells.map { sub(t, $0) }, ["b", "c"])
+        XCTAssertFalse(rows[2].leadingPipe)
+        XCTAssertTrue(rows[2].isLast)
+        XCTAssertEqual(els.filter { if case .tableDelimiter = $0.kind { return true }; return false }.count, 1)
+        XCTAssertEqual(els.filter { $0.kind == .bold }.count, 1)
+        XCTAssertEqual(els.filter { $0.kind == .inlineCode }.count, 1)
+        XCTAssertEqual(els.compactMap { $0.link }.first?.target, "x")
+        // Hidden: everything but cells and inner pipes
+        let row0 = els.first { if case .tableRow = $0.kind { return true }; return false }!
+        XCTAssertEqual(row0.hidden.map { sub(t, $0) }, ["| ", " ", " ", " ", " ", " |"])
+    }
+
+    func testNotATable() {
+        let t = "a | b\nnot a delimiter"
+        XCTAssertTrue(MarkdownParser.parse(t).allSatisfy { if case .tableRow = $0.kind { return false }; return true })
+        let t2 = "| a | b |\n|---|\n"
+        XCTAssertTrue(MarkdownParser.parse(t2).allSatisfy { if case .tableRow = $0.kind { return false }; return true })
+    }
+}
+
+final class EscapedAliasTests: XCTestCase {
+    func testEscapedPipeInWikiLink() {
+        let t = "| a |\n|---|\n| [[Note\\|alias]] |"
+        XCTAssertEqual(MarkdownParser.parse(t).compactMap { $0.link }.first?.target, "Note")
+    }
+}
