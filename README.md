@@ -23,9 +23,14 @@ the caret.
     in its subfolders. Parent folders need an explicit `../` path.
   - If the target doesn't exist, Slopdown offers to **create the file** (next to the
     note) or to **choose a file** (and rewrites the link to point to it).
-- **Images**: `![[picture.png]]`, `![[picture.png|300]]`, `![alt|300x200](path.png)`,
-  rendered below their line when the image is alone on that line.
+- **Images**: `![[picture.png]]`, `![[picture.png|300]]`, `![alt|300x200](path.png)`.
+  On their own line they render as a block; inside a sentence they render inline.
   Remote (http) images are never loaded.
+- **Tables**: pipe tables with `:--`, `:-:`, `--:` alignment render as a grid; the raw
+  markdown comes back while the caret is in the table. Tables wider than the text
+  column stay raw.
+- **Embeds**: `![[Note]]` and `![[Note#Heading]]` on their own line show that note (or
+  section) in a box; ⌘-click the box to open the note.
 - **Source mode** (View → Source Mode, ⌘E): plain monospaced markdown.
 - macOS autosave, versions, rename / move, and reloading files changed on disk.
 
@@ -39,6 +44,10 @@ open dist/Slopdown.app Samples/Welcome.md
 ```
 
 `swift test` runs the parser / link-resolution tests (these also run on Linux).
+
+CI also runs a visual self-test: `SLOPDOWN_AUTOTEST="/abs/note.md" SLOPDOWN_AUTOTEST_OUT=dir`
+makes the app render each note at several scroll positions into PNG files and quit
+(they are uploaded as the `screenshots` artifact).
 
 Every push to `main` builds a **nightly** release on GitHub. The app is not signed:
 right-click → Open the first time, or `xattr -dr com.apple.quarantine Slopdown.app`.
