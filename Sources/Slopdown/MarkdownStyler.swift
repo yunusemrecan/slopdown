@@ -208,6 +208,9 @@ final class MarkdownStyler {
             p.headIndent = TableLayout.padding
             p.tabStops = layout.tabStops
             p.defaultTabInterval = 10_000
+            // Rows are known to fit; never let the typesetter wrap one (it would break at
+            // the hidden space after the leading pipe).
+            p.lineBreakMode = .byClipping
             set(storage, [.paragraphStyle: p,
                           .sdTable: TableRowDecoration(layout: layout, isHeader: row.isHeader, isDelimiter: false)],
                 lineWithBreak(e.range, storage), clip: clip)
