@@ -68,7 +68,9 @@ enum Autotest {
                     let gr = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
                     var rects: [String] = []
                     lm.enumerateLineFragments(forGlyphRange: gr) { rect, used, _, g, _ in
-                        rects.append("frag \(Int(rect.minY))-\(Int(rect.maxY)) used \(Int(used.minY))-\(Int(used.maxY)) glyphs \(g)")
+                        let cr = lm.characterRange(forGlyphRange: g, actualGlyphRange: nil)
+                        let text = (ts.string as NSString).substring(with: cr).debugDescription
+                        rects.append("frag \(Int(rect.minY))-\(Int(rect.maxY)) x \(Int(used.minX))-\(Int(used.maxX)) chars \(cr) \(text)")
                     }
                     log("\(base): \(key.rawValue) \(r) \(rects)")
                 }
