@@ -33,7 +33,7 @@ final class MarkdownDocument: NSDocument {
         let text = String(decoding: data, as: UTF8.self)
         loadedText = text
         // Revert / file changed on disk while the window is open
-        let update = { [weak self] in
+        let update: () -> Void = { [weak self] in
             guard let editor = self?.editor else { return }
             editor.setText(text)
             self?.undoManager?.removeAllActions()
@@ -44,7 +44,7 @@ final class MarkdownDocument: NSDocument {
     override var fileURL: URL? {
         didSet {
             guard oldValue != fileURL else { return }
-            let update = { [weak self] in self?.editor?.documentLocationChanged() }
+            let update: () -> Void = { [weak self] in self?.editor?.documentLocationChanged() }
             if Thread.isMainThread { update() } else { DispatchQueue.main.async(execute: update) }
         }
     }
