@@ -55,6 +55,8 @@ public struct MDTableRow: Equatable {
     public var isLast: Bool
     /// Every `|` that separates cells (not escaped, not inside code or wiki links).
     public var pipes: [NSRange]
+    /// The pipe before the first cell, if the row starts with one.
+    public var leading: NSRange?
     /// True when the row starts / ends with a pipe.
     public var leadingPipe: Bool
     public var trailingPipe: Bool

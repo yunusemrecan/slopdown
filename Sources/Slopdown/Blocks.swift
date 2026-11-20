@@ -28,19 +28,6 @@ final class TableLayout: NSObject {
         return columnWidths.map { w in defer { x += w }; return x }
     }
 
-    /// Tab stops for columns 1…n (column 0 starts at the paragraph indent).
-    var tabStops: [NSTextTab] {
-        let pad = Self.padding
-        return zip(columnStarts, zip(columnWidths, alignments)).dropFirst().map { start, wa in
-            let (w, a) = wa
-            switch a {
-            case .left: return NSTextTab(textAlignment: .left, location: start + pad)
-            case .center: return NSTextTab(textAlignment: .center, location: start + w / 2)
-            case .right: return NSTextTab(textAlignment: .right, location: start + w - pad)
-            }
-        }
-    }
-
     override func isEqual(_ object: Any?) -> Bool {
         guard let o = object as? TableLayout else { return false }
         return o.columnWidths == columnWidths && o.alignments == alignments

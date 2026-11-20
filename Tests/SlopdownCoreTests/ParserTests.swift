@@ -248,7 +248,8 @@ final class TableTests: XCTestCase {
         XCTAssertEqual(els.compactMap { $0.link }.first?.target, "x")
         // Hidden: everything but cells and inner pipes
         let row0 = els.first { if case .tableRow = $0.kind { return true }; return false }!
-        XCTAssertEqual(row0.hidden.map { sub(t, $0) }, ["| ", " ", " ", " ", " ", " |"])
+        XCTAssertEqual(row0.hidden.map { sub(t, $0) }, [" ", " ", " ", " ", " ", " |"])
+        XCTAssertEqual(row0.tableRow?.leading.map { sub(t, $0) }, "|")
     }
 
     func testNotATable() {

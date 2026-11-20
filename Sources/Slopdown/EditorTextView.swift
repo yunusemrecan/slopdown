@@ -55,7 +55,7 @@ final class GlyphConcealer: NSObject, NSLayoutManagerDelegate {
                        shouldUse action: NSLayoutManager.ControlCharacterAction,
                        forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
         guard let storage = layoutManager.textStorage, charIndex < storage.length else { return action }
-        if storage.attribute(.sdTabPipe, at: charIndex, effectiveRange: nil) != nil { return .horizontalTab }
+        if storage.attribute(.sdTabPipe, at: charIndex, effectiveRange: nil) != nil { return .whitespace }
         if storage.attribute(.sdInlineImage, at: charIndex, effectiveRange: nil) != nil { return .whitespace }
         return action
     }
@@ -66,9 +66,14 @@ final class GlyphConcealer: NSObject, NSLayoutManagerDelegate {
                        proposedLineFragment proposedRect: NSRect,
                        glyphPosition: NSPoint,
                        characterIndex charIndex: Int) -> NSRect {
-        guard let storage = layoutManager.textStorage, charIndex < storage.length,
-              let img = storage.attribute(.sdInlineImage, at: charIndex, effectiveRange: nil) as? RenderedImage
-        else { return NSRect(origin: glyphPosition, size: .zero) }
+        guard let storage = layoutManager.textStorage, charIndex < storage.length else { return .zero }
+        // Table separator: a gap up to the x where the next cell starts.
+        if let target = storage.attribute(.sdTabPipe, at: charIndex, effectiveRange: nil) as? NSNumber {
+            let x = textContainer.lineFragmentPadding + CGFloat(target.doubleValue)
+            return NSRect(x: 0, y: 0, width: max(0, x - glyphPosition.x), height: 1)
+        }
+        guard let img = storage.attribute(.sdInlineImage, at: charIndex, effectiveRange: nil) as? RenderedImage
+        else { return .zero }
         return NSRect(x: 0, y: 0, width: img.size.width + 2, height: img.size.height)
     }
 }

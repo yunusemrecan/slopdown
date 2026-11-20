@@ -43,11 +43,16 @@ final class MarkdownStyler {
     /// runs that actually differ are written back, so the text system re-lays out as
     /// little as possible (important because this runs on every keystroke).
     func apply(to storage: NSTextStorage, in requested: NSRange) {
-        let range = NSIntersectionRange(requested, NSRange(location: 0, length: storage.length))
+        var range = NSIntersectionRange(requested, NSRange(location: 0, length: storage.length))
         guard range.length > 0 else { return }
+        // A table is measured as a whole, so restyle whole tables.
+        for e in elements {
+            if let row = e.tableRow, row.table.overlaps(range) {
+                range = NSUnionRange(range, (storage.string as NSString).paragraphRange(for: row.table))
+            }
+        }
 
         let scratch = NSMutableAttributedString(string: storage.string)
-        tableLayouts = [:]
         scratch.setAttributes(Theme.baseAttributes(sourceMode: sourceMode), range: range)
         if sourceMode {
             for e in elements where e.range.overlaps(range) || paragraphTouches(e, range) {
@@ -57,6 +62,7 @@ final class MarkdownStyler {
             for (i, e) in elements.enumerated() where e.range.overlaps(range) || paragraphTouches(e, range) {
                 style(e, revealed: revealed.contains(i), scratch, clip: range)
             }
+            styleTables(scratch, clip: range)
         }
 
         storage.beginEditing()
@@ -194,43 +200,8 @@ final class MarkdownStyler {
             set(storage, [.font: Theme.monoFont, .backgroundColor: Theme.inlineCodeBackground], e.content, clip: clip)
             hideOrDim(e, revealed: revealed, storage, clip: clip)
 
-        case .tableRow(let row):
-            guard !revealed, let layout = tableLayout(for: row, storage) else {
-                for p in row.pipes { set(storage, [.foregroundColor: Theme.syntaxColor], p, clip: clip) }
-                for h in e.hidden { set(storage, [.foregroundColor: Theme.syntaxColor], h, clip: clip) }
-                return
-            }
-            let p = NSMutableParagraphStyle()
-            p.setParagraphStyle(Theme.paragraph)
-            p.lineSpacing = 5
-            p.paragraphSpacingBefore = 4
-            p.firstLineHeadIndent = TableLayout.padding
-            p.headIndent = TableLayout.padding
-            p.tabStops = layout.tabStops
-            p.defaultTabInterval = 10_000
-            // Rows are known to fit; never let the typesetter wrap one (it would break at
-            // the hidden space after the leading pipe).
-            p.lineBreakMode = .byClipping
-            set(storage, [.paragraphStyle: p,
-                          .sdTable: TableRowDecoration(layout: layout, isHeader: row.isHeader, isDelimiter: false)],
-                lineWithBreak(e.range, storage), clip: clip)
-            if row.isHeader {
-                for c in row.cells { addTrait(storage, .boldFontMask, c, clip: clip) }
-            }
-            for h in e.hidden { set(storage, [.sdHidden: true], h, clip: clip) }
-            for pipe in row.pipes { set(storage, [.sdTabPipe: true, .foregroundColor: NSColor.clear], pipe, clip: clip) }
-
-        case .tableDelimiter(let row):
-            guard !revealed, let layout = tableLayout(for: row, storage) else {
-                set(storage, [.foregroundColor: Theme.syntaxColor], e.range, clip: clip)
-                return
-            }
-            let p = NSMutableParagraphStyle()
-            p.minimumLineHeight = 1
-            p.maximumLineHeight = 1
-            set(storage, [.sdHidden: true, .font: NSFont.systemFont(ofSize: 1), .paragraphStyle: p,
-                          .sdTable: TableRowDecoration(layout: layout, isHeader: false, isDelimiter: true)],
-                lineWithBreak(e.range, storage), clip: clip)
+        case .tableRow, .tableDelimiter:
+            break // styleTables()
 
         case .link(let link) where link.style == .embed && allowEmbeds && !link.target.isEmpty:
             guard isAloneOnLine(e, storage), let base = baseDirectory,
@@ -337,40 +308,110 @@ final class MarkdownStyler {
 
     // MARK: - Tables
 
-    private var tableLayouts: [Int: TableLayout?] = [:]
-
-    /// Column widths from the visible cell text; nil when the table is wider than the
-    /// text column (then it stays as plain markdown).
-    private func tableLayout(for row: MDTableRow, _ storage: NSMutableAttributedString) -> TableLayout? {
-        let key = row.table.location
-        if let cached = tableLayouts[key] { return cached }
-        let ns = storage.string as NSString
-        let rows = elements.compactMap { e -> MDTableRow? in
-            if case .tableRow(let r) = e.kind, r.table == row.table { return r }
-            return nil
+    /// Tables are styled after everything else, because column widths are measured
+    /// from the already-styled cell text (bold, code, hidden syntax, inline images).
+    private func styleTables(_ storage: NSMutableAttributedString, clip: NSRange) {
+        var tables: [Int: [(index: Int, element: MDElement, row: MDTableRow)]] = [:]
+        for (i, e) in elements.enumerated() {
+            guard let row = e.tableRow, row.table.overlaps(clip) else { continue }
+            tables[row.table.location, default: []].append((i, e, row))
         }
-        var hidden = IndexSet()
-        for e in elements where !e.isBlock && row.table.containsIndex(e.range.location) {
-            for h in e.hidden { hidden.insert(integersIn: h.location..<NSMaxRange(h)) }
-        }
-        let columns = row.alignments.count
-        var widths = [CGFloat](repeating: 0, count: columns)
-        let bold = NSFontManager.shared.convert(Theme.bodyFont, toHaveTrait: .boldFontMask)
-        for r in rows {
-            let font = r.isHeader ? bold : Theme.bodyFont
-            for (c, cell) in r.cells.enumerated() where c < columns && cell.length > 0 {
-                var visible: [unichar] = []
-                for k in cell.location..<NSMaxRange(cell) where !hidden.contains(k) { visible.append(ns.character(at: k)) }
-                let text = String(utf16CodeUnits: visible, count: visible.count)
-                let w = (text as NSString).size(withAttributes: [.font: font]).width
-                widths[c] = max(widths[c], ceil(w) + 4)
+        for (_, rows) in tables {
+            let isRevealed = rows.contains { revealed.contains($0.index) }
+            if isRevealed || !renderTable(rows.map { ($0.element, $0.row) }, storage, clip: clip) {
+                // Plain markdown, pipes dimmed
+                for (_, e, row) in rows {
+                    if case .tableDelimiter = e.kind {
+                        set(storage, [.foregroundColor: Theme.syntaxColor], e.range, clip: clip)
+                        continue
+                    }
+                    for p in row.pipes + [row.leading].compactMap({ $0 }) {
+                        set(storage, [.foregroundColor: Theme.syntaxColor], p, clip: clip)
+                    }
+                    for h in e.hidden { set(storage, [.foregroundColor: Theme.syntaxColor], h, clip: clip) }
+                }
             }
         }
-        let layout = TableLayout(columnWidths: widths.map { max($0, 16) + 2 * TableLayout.padding },
-                                 alignments: row.alignments)
-        let result: TableLayout? = layout.totalWidth <= textWidth ? layout : nil
-        tableLayouts[key] = result
-        return result
+    }
+
+    /// Visible width of a styled range: hidden characters skipped, inline images counted.
+    private func visibleWidth(_ storage: NSMutableAttributedString, _ r: NSRange) -> CGFloat {
+        guard r.length > 0 else { return 0 }
+        let visible = NSMutableAttributedString()
+        var extra: CGFloat = 0
+        storage.enumerateAttributes(in: r) { attrs, run, _ in
+            if let img = attrs[.sdInlineImage] as? RenderedImage { extra += img.size.width + 2; return }
+            if attrs[.sdHidden] != nil { return }
+            visible.append(storage.attributedSubstring(from: run))
+        }
+        return ceil(visible.size().width + extra)
+    }
+
+    /// Returns false when the table does not fit the text width (it then stays raw).
+    private func renderTable(_ rows: [(MDElement, MDTableRow)], _ storage: NSMutableAttributedString, clip: NSRange) -> Bool {
+        guard let first = rows.first?.1 else { return false }
+        let columns = first.alignments.count
+        let pad = TableLayout.padding
+
+        // Header in bold, then measure
+        for (e, row) in rows where row.isHeader {
+            if case .tableRow = e.kind { for c in row.cells { addTrait(storage, .boldFontMask, c, clip: clip) } }
+        }
+        var cellWidth: [Int: CGFloat] = [:]
+        var widths = [CGFloat](repeating: 16, count: columns)
+        for (e, row) in rows {
+            guard case .tableRow = e.kind else { continue }
+            for (c, cell) in row.cells.enumerated() where c < columns {
+                let w = visibleWidth(storage, cell)
+                cellWidth[cell.location] = w
+                widths[c] = max(widths[c], w)
+            }
+        }
+        let layout = TableLayout(columnWidths: widths.map { $0 + 2 * pad }, alignments: first.alignments)
+        guard layout.totalWidth <= textWidth else { return false }
+        let starts = layout.columnStarts
+
+        for (e, row) in rows {
+            if case .tableDelimiter = e.kind {
+                let p = NSMutableParagraphStyle()
+                p.minimumLineHeight = 1
+                p.maximumLineHeight = 1
+                set(storage, [.sdHidden: true, .font: NSFont.systemFont(ofSize: 1), .paragraphStyle: p,
+                              .sdTable: TableRowDecoration(layout: layout, isHeader: false, isDelimiter: true)],
+                    lineWithBreak(e.range, storage), clip: clip)
+                continue
+            }
+            let p = NSMutableParagraphStyle()
+            p.setParagraphStyle(Theme.paragraph)
+            p.lineSpacing = 5
+            p.paragraphSpacingBefore = 4
+            p.firstLineHeadIndent = row.leading == nil ? pad : 0
+            p.headIndent = pad
+            p.lineBreakMode = .byClipping
+            set(storage, [.paragraphStyle: p,
+                          .sdTable: TableRowDecoration(layout: layout, isHeader: row.isHeader, isDelimiter: false)],
+                lineWithBreak(e.range, storage), clip: clip)
+            for h in e.hidden { set(storage, [.sdHidden: true], h, clip: clip) }
+
+            // The separator before each cell becomes a gap that ends where the cell starts.
+            for (c, cell) in row.cells.enumerated() where c < columns {
+                let sep: NSRange? = c == 0 ? row.leading : (c - 1 < row.pipes.count ? row.pipes[c - 1] : nil)
+                guard let sep else { continue }
+                let content = layout.columnWidths[c] - 2 * pad
+                let w = cellWidth[cell.location] ?? 0
+                let offset: CGFloat
+                switch layout.alignments[c] {
+                case .left: offset = 0
+                case .center: offset = max(0, (content - w) / 2)
+                case .right: offset = max(0, content - w)
+                }
+                set(storage, [.sdTabPipe: NSNumber(value: Double(starts[c] + pad + offset)),
+                              .foregroundColor: NSColor.clear], sep, clip: clip)
+            }
+            // Extra pipes (more cells than columns) are just hidden.
+            for p in row.pipes.dropFirst(max(0, columns - 1)) { set(storage, [.sdHidden: true], p, clip: clip) }
+        }
+        return true
     }
 
     private func isAloneOnLine(_ e: MDElement, _ storage: NSMutableAttributedString) -> Bool {

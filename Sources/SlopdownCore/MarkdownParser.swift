@@ -215,17 +215,19 @@ public enum MarkdownParser {
 
         // Delimiter row: hidden entirely while the table is rendered.
         let delimRow = MDTableRow(table: tableRange, rowIndex: -1, isLast: false, pipes: delim.inner,
-                                  leadingPipe: delim.leading, trailingPipe: delim.trailing,
+                                  leading: delim.leading ? delim.pipes.first : nil, leadingPipe: delim.leading, trailingPipe: delim.trailing,
                                   cells: delim.cells, alignments: alignments)
 
         for (n, row) in rows.enumerated() {
             let r = MDTableRow(table: tableRange, rowIndex: n, isLast: n == rows.count - 1,
-                               pipes: row.split.inner, leadingPipe: row.split.leading,
+                               pipes: row.split.inner, leading: row.split.leading ? row.split.pipes.first : nil,
+                               leadingPipe: row.split.leading,
                                trailingPipe: row.split.trailing, cells: row.split.cells,
                                alignments: alignments)
             var e = block(.tableRow(r), row.line)
             e.revealRange = tableRange
-            e.hidden = hidden(row.line, keep: row.split.cells.filter { $0.length > 0 } + row.split.inner)
+            let leading = row.split.leading ? [row.split.pipes[0]] : []
+            e.hidden = hidden(row.line, keep: row.split.cells.filter { $0.length > 0 } + row.split.inner + leading)
             out.append(e)
             for cell in row.split.cells where cell.length > 0 {
                 parseInline(str, ns, cell, line: row.line, into: &out)
