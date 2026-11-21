@@ -159,6 +159,19 @@ enum Autotest {
             check("unheading", tv.string == original)
         }
 
+        // About window with the vibe-coded notice
+        (NSApp.delegate as? AppDelegate)?.showAbout(nil)
+        if let about = NSApp.windows.first(where: { $0.isVisible && $0 !== editor.window && $0.contentView != nil }),
+           let view = about.contentView?.superview ?? about.contentView,
+           let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.display()
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: outDir.appendingPathComponent("About.png"))
+            log("autotest: wrote About.png")
+            about.close()
+        }
+        check("disclaimer", Disclaimer.text(for: ["tr"]).hasPrefix("Bu uygulama"))
+
         let info = editor.statusBar?.infoLabel.stringValue ?? ""
         check("statusbar", info.contains("words") && info.contains("Ln "), info.debugDescription)
         let path = editor.statusBar?.pathButton.title ?? ""

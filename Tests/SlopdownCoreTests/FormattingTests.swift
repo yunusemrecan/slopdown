@@ -76,3 +76,13 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(TextStats.lineAndColumn("", 0).line, 1)
     }
 }
+
+final class DisclaimerTests: XCTestCase {
+    func testLanguagePick() {
+        XCTAssertTrue(Disclaimer.text(for: ["tr-TR", "en-US"]).hasPrefix("Bu uygulama"))
+        XCTAssertTrue(Disclaimer.text(for: ["zh-Hans-CN"]).hasPrefix("本应用"))
+        XCTAssertTrue(Disclaimer.text(for: ["fi-FI", "de-DE"]).hasPrefix("Diese App"))
+        XCTAssertTrue(Disclaimer.text(for: ["fi-FI"]).hasPrefix("This app"))
+        XCTAssertEqual(Set(Disclaimer.notices.map { $0.code }).count, Disclaimer.notices.count)
+    }
+}

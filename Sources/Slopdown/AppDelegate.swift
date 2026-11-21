@@ -2,6 +2,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import SlopdownCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static let appName = "Slopdown"
@@ -26,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // App
         let app = submenu(main, name)
-        app.addItem(withTitle: "About \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "About \(name)", action: #selector(showAbout(_:)), keyEquivalent: "")
         app.addItem(.separator())
         let services = NSMenu(title: "Services")
         app.addItem(withTitle: "Services", action: nil, keyEquivalent: "").submenu = services
@@ -129,6 +130,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.helpMenu = help
 
         return main
+    }
+
+    /// About window with the vibe-coded notice in the user's language.
+    @objc func showAbout(_ sender: Any?) {
+        let p = NSMutableParagraphStyle()
+        p.alignment = .center
+        let body: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor, .paragraphStyle: p,
+        ]
+        let credits = NSMutableAttributedString(string: "⚠︎ \(Disclaimer.title)\n", attributes: [
+            .font: NSFont.boldSystemFont(ofSize: 11), .foregroundColor: NSColor.systemOrange, .paragraphStyle: p,
+        ])
+        credits.append(NSAttributedString(string: Disclaimer.text(), attributes: body))
+        credits.append(NSAttributedString(string: "\n\ngithub.com/yunusemrecan/slopdown · GPL-3.0", attributes: [
+            .font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: p,
+        ]))
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func submenu(_ main: NSMenu, _ title: String) -> NSMenu {
