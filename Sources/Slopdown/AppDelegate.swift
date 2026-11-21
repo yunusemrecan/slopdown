@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let setName = NSSelectorFromString("_setMenuName:")
         if recent.responds(to: setName) { recent.perform(setName, with: "NSRecentDocumentsMenu") }
         file.addItem(withTitle: "Open Recent", action: nil, keyEquivalent: "").submenu = recent
+        file.addItem(withTitle: "Quick Open…", action: #selector(EditorWindowController.quickOpen(_:)), keyEquivalent: "p")
         file.addItem(withTitle: "New Hugo Page…", action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
         let preview = file.addItem(withTitle: "Preview in Browser", action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "p")
         preview.keyEquivalentModifierMask = [.command, .option]
@@ -131,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                       action: #selector(EditorWindowController.toggleSourceMode(_:)), keyEquivalent: "e")
         previewPaneItem = view.addItem(withTitle: "Preview Pane",
                                        action: #selector(EditorWindowController.togglePreviewPane(_:)), keyEquivalent: "P")
+        view.addItem(withTitle: "Go to Heading…", action: #selector(EditorWindowController.goToHeading(_:)), keyEquivalent: "O")
         view.addItem(.separator())
         view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]

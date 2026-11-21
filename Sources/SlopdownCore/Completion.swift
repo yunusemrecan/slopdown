@@ -146,6 +146,15 @@ public enum Completion {
             .prefix(limit).map { $0.item }
     }
 
+    /// Items matching `query` in any of their fields, best first (stable for ties).
+    public static func filter<T>(_ items: [T], query: String, fields: (T) -> [String]) -> [T] {
+        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+        return items.enumerated()
+            .compactMap { i, item in match(q, fields(item).map { $0.lowercased() }).map { (score: $0, index: i, item: item) } }
+            .sorted { $0.score != $1.score ? $0.score < $1.score : $0.index < $1.index }
+            .map { $0.item }
+    }
+
     /// Lower is better: 0 prefix, 1 word prefix, 2 substring, 3 in-order letters; nil: no match.
     static func match(_ q: String, _ fields: [String]) -> Int? {
         if q.isEmpty { return 0 }

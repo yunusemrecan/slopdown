@@ -8,7 +8,9 @@ import Foundation
 
 public struct HeadingInfo: Equatable {
     public var range: NSRange      // the heading line
-    public var title: String       // visible text: syntax removed, link aliases kept
+    public var title: String       // normalized visible text (for matching)
+    public var text: String        // visible text as shown
+    public var level: Int
     /// Which heading with this title it is (0 = first), and how many there are.
     public var occurrence: Int
     public var count: Int
@@ -23,7 +25,7 @@ public enum HeadingSync {
         hiddenInline.sort { $0.location < $1.location }
 
         for e in elements {
-            guard case .heading = e.kind else { continue }
+            guard case .heading(let level) = e.kind else { continue }
             var chars: [unichar] = []
             let c = e.content
             var k = c.location
@@ -40,8 +42,9 @@ public enum HeadingSync {
             var title = String(utf16CodeUnits: chars, count: chars.count)
             // Closing hashes ("## Title ##") are not part of the title.
             title = title.replacingOccurrences(of: #"\s+#+\s*$"#, with: "", options: .regularExpression)
+            let shown = title.trimmingCharacters(in: .whitespaces)
             title = normalize(title)
-            result.append(HeadingInfo(range: e.range, title: title, occurrence: 0, count: 0))
+            result.append(HeadingInfo(range: e.range, title: title, text: shown, level: level, occurrence: 0, count: 0))
         }
         var counts: [String: Int] = [:]
         for i in result.indices {

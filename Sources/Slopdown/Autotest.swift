@@ -414,6 +414,15 @@ enum Autotest {
         check("complete-closed", !editor.completionVisible)
         editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: before, actionName: "")
 
+        // Quick open and go to heading
+        let qo = Completion.filter(editor.quickOpenItems(), query: "seco") { [$0.title, $0.detail] }
+        check("quick-open", qo.first?.title == "Second Note", qo.first?.title ?? "none")
+        let hd = Completion.filter(editor.headingItems(), query: "tabl") { [$0.title, $0.detail] }
+        check("go-to-heading", hd.first?.title == "Table", hd.first?.title ?? "none")
+        hd.first?.action()
+        let caretLine = (tv.string as NSString).substring(with: (tv.string as NSString).lineRange(for: tv.selectedRange()))
+        check("go-to-heading-caret", caretLine.hasPrefix("## Table"), caretLine.debugDescription)
+
         // Pasting an image saves it next to the note
         check("paste", pasteImageTest(editor, expectPrefix: "![[pasted-image-"))
         editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: before, actionName: "")

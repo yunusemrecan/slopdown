@@ -102,5 +102,10 @@ final class HeadingSyncTests: XCTestCase {
         XCTAssertEqual(h.map { $0.title }, ["the big plan", "details", "details", "the big plan"])
         XCTAssertEqual(h.map { $0.occurrence }, [0, 0, 1, 1])
         XCTAssertEqual(h.map { $0.count }, [2, 2, 2, 2])
+        XCTAssertEqual(h.map { $0.text }, ["The Big Plan", "Details", "details", "The Big Plan"])
+        XCTAssertEqual(h.map { $0.level }, [1, 2, 2, 1])
+        let names = ["Second Note", "Index", "Project Plan"]
+        XCTAssertEqual(Completion.filter(names, query: "pl") { [$0] }, ["Project Plan"])
+        XCTAssertEqual(Completion.filter(names, query: "") { [$0] }, names)
     }
 }

@@ -133,7 +133,7 @@ extension EditorWindowController {
     var completionVisible: Bool { completion.popup.isVisible }
     var completionItems: [CompletionItem] { completion.popup.isVisible ? completion.popup.items : [] }
 
-    private func pages(includeImages: Bool) -> [PageEntry] {
+    func completionPages(includeImages: Bool) -> [PageEntry] {
         guard let doc = markdownDocument?.fileURL else { return [] }
         let root = site?.contentDir ?? doc.deletingLastPathComponent()
         let key = root.path + (includeImages ? "|img" : "")
@@ -155,7 +155,7 @@ extension EditorWindowController {
         }
         let typed = text.substring(with: ctx.partial)
         let list = Completion.items(for: ctx.kind, typed: typed,
-                                    pages: pages(includeImages: ctx.kind == .wiki(embed: true)), context: linkContext)
+                                    pages: completionPages(includeImages: ctx.kind == .wiki(embed: true)), context: linkContext)
         guard !list.isEmpty else { hideCompletion(); return }
         completion.context = ctx
         completion.popup.onAccept = { [weak self] in self?.acceptCompletion($0) }
