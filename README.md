@@ -41,6 +41,11 @@ under the caret, like Obsidian's live preview.
 > it line by line. Run it only if you choose to, on your own judgement and with your own
 > understanding of what that means. Nobody vouches for it, and it comes with no warranty
 > (see the [license](LICENSE)). Keep backups of anything you open with it.
+>
+> If you know what you're doing: Slopdown is a **forever nightly**. There is no stable
+> release; the [latest build](https://github.com/yunusemrecan/slopdown/releases/tag/nightly)
+> is rebuilt from `main` on every push (Apple Silicon, ad-hoc signed). Or
+> [build it yourself](#build-from-source).
 
 ## Features
 
