@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var sourceModeItem: NSMenuItem?
     private var previewPaneItem: NSMenuItem?
+    private var focusModeItem: NSMenuItem?
+    private var textWidthItems: [NSMenuItem] = []
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = buildMainMenu()
@@ -134,6 +136,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                        action: #selector(EditorWindowController.togglePreviewPane(_:)), keyEquivalent: "P")
         view.addItem(withTitle: L("Go to Heading…"), action: #selector(EditorWindowController.goToHeading(_:)), keyEquivalent: "O")
         view.addItem(.separator())
+        focusModeItem = view.addItem(withTitle: L("Focus Mode"),
+                                     action: #selector(EditorWindowController.toggleFocusMode(_:)), keyEquivalent: "D")
+        let widths = NSMenu(title: L("Text Width"))
+        widths.delegate = self
+        let widthTitles: [TextWidth: String] = [
+            .narrow: L("Narrow"), .medium: L("Medium"), .wide: L("Wide"), .full: L("Full Width"),
+        ]
+        for (i, w) in TextWidth.allCases.enumerated() {
+            let item = widths.addItem(withTitle: widthTitles[w] ?? w.rawValue,
+                                      action: #selector(chooseTextWidth(_:)), keyEquivalent: "\(i + 1)")
+            item.keyEquivalentModifierMask = [.command, .option]
+            item.target = self
+            item.tag = i
+            textWidthItems.append(item)
+        }
+        view.addItem(withTitle: L("Text Width"), action: nil, keyEquivalent: "").submenu = widths
+        view.addItem(.separator())
         view.addItem(withTitle: L("Enter Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]
 
@@ -180,6 +199,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let editor = NSApp.keyWindow?.windowController as? EditorWindowController
         sourceModeItem?.state = (editor?.styler.sourceMode ?? false) ? .on : .off
         previewPaneItem?.state = (editor?.isPreviewVisible ?? false) ? .on : .off
+        focusModeItem?.state = (editor?.focusMode ?? false) ? .on : .off
+        let width = Theme.textWidth
+        for item in textWidthItems {
+            item.state = TextWidth.allCases[item.tag] == width ? .on : .off
+        }
+    }
+
+    /// View ▸ Text Width; applies to every window and is remembered.
+    @objc func chooseTextWidth(_ sender: NSMenuItem) {
+        let all = TextWidth.allCases
+        guard all.indices.contains(sender.tag) else { return }
+        Theme.textWidth = all[sender.tag]
     }
 }
 #endif

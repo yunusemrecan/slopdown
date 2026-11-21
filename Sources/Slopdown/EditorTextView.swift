@@ -89,10 +89,12 @@ final class EditorTextView: NSTextView {
         if newSize.width != oldWidth { updateTextWidth() }
     }
 
-    /// Centers a column of readable width; the text container is sized by hand.
+    /// Centers a column of the chosen width (View ▸ Text Width); the text container is
+    /// sized by hand.
     func updateTextWidth() {
         let width = bounds.width
-        let side = floor(max(28, (width - Theme.readableWidth) / 2))
+        let column = Theme.textWidth.points.map { CGFloat($0) } ?? width
+        let side = floor(max(28, (width - column) / 2))
         let inset = NSSize(width: side, height: 30)
         if textContainerInset != inset { textContainerInset = inset }
         let containerWidth = max(120, width - 2 * side)
@@ -129,6 +131,10 @@ final class EditorTextView: NSTextView {
             case #selector(cancelOperation(_:)): editor.hideCompletion(); return
             default: break
             }
+        }
+        if selector == #selector(cancelOperation(_:)), let editor, editor.focusMode {
+            editor.toggleFocusMode(nil)
+            return
         }
         super.doCommand(by: selector)
     }
@@ -408,6 +414,49 @@ final class EditorTextView: NSTextView {
                 path.lineWidth = 1
                 path.stroke()
             }
+        }
+
+        if let focusBlock { drawFocusDimming(focusBlock, in: dirtyRect) }
+    }
+
+    // MARK: - Focus mode
+
+    /// The block that stays bright in focus mode; nil when focus mode is off.
+    var focusBlock: NSRange? {
+        didSet { if focusBlock != oldValue { needsDisplay = true } }
+    }
+
+    /// Fades everything above and below the focus block (text, images and decorations).
+    private func drawFocusDimming(_ block: NSRange, in dirtyRect: NSRect) {
+        guard let lm = layoutManager, let ts = textStorage else { return }
+        let origin = textContainerOrigin
+        let length = ts.length
+        func lineTop(_ ci: Int) -> CGFloat? {
+            if ci < length {
+                return origin.y + lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: ci), effectiveRange: nil).minY
+            }
+            let extra = lm.extraLineFragmentRect
+            if extra.height > 0 { return origin.y + extra.minY }
+            guard length > 0 else { return nil }
+            return origin.y + lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: length - 1), effectiveRange: nil).minY
+        }
+        guard let top = lineTop(block.location) else { return }
+        let end = NSMaxRange(block)
+        let bottom: CGFloat
+        if end < length, block.length > 0 {
+            bottom = lineTop(end) ?? bounds.maxY
+        } else {
+            bottom = bounds.maxY
+        }
+        let veil = (backgroundColor.usingColorSpace(.deviceRGB) ?? .textBackgroundColor).withAlphaComponent(0.72)
+        veil.setFill()
+        if top > dirtyRect.minY {
+            NSRect(x: dirtyRect.minX, y: dirtyRect.minY, width: dirtyRect.width,
+                   height: min(top, dirtyRect.maxY) - dirtyRect.minY).fill(using: .sourceOver)
+        }
+        if bottom < dirtyRect.maxY {
+            let y = max(bottom, dirtyRect.minY)
+            NSRect(x: dirtyRect.minX, y: y, width: dirtyRect.width, height: dirtyRect.maxY - y).fill(using: .sourceOver)
         }
     }
 

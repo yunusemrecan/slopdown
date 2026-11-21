@@ -9,7 +9,7 @@ sınayamıyor. Bu liste onlar için.
 sırayla dene. Bir sorun görürsen test numarasıyla birlikte yaz (ör. "L3: link yeni pencerede
 değil, aynı pencerede açıldı"). Geçenleri işaretlemen yeterli.
 
-Son güncelleme: 21 Kasım 2026 (Türkçe arayüz, hızlı açma, başlığa göre panel, çok dilli Hugo eklendi)
+Son güncelleme: 21 Kasım 2026 (odak modu, yazı genişliği ve 10 yeni arayüz dili eklendi)
 
 ---
 
@@ -18,6 +18,7 @@ Son güncelleme: 21 Kasım 2026 (Türkçe arayüz, hızlı açma, başlığa gö
 - [ ] **A1** — Uygulama açılıyor; Dock'ta ikon (M↓ ve yıldızlar) görünüyor.
 - [ ] **A2** — Slopdown → Slopdown Hakkında: turuncu "⚠︎ Vibe-coded" uyarısı **Türkçe** görünüyor.
 - [ ] **A5** — Mac'in dili Türkçeyken menüler, araç çubuğu ipuçları, durum çubuğu ve uyarı pencereleri Türkçe. Sistem Ayarları → Genel → Dil ve Bölge → Uygulamalar'dan Slopdown'u İngilizceye alınca her şey İngilizce. Çevirisi tuhaf ya da kesilen metin varsa ekran görüntüsüyle yaz.
+- [ ] **A6** — Slopdown'u Sistem Ayarları → Genel → Dil ve Bölge → Uygulamalar'dan sırayla Almanca, Japonca ve Arapçaya al. Menüler o dilde. Arapçada menüler ve pencere sağdan sola dizilebilir; editörün içindeki madde işaretleri, alıntı çizgileri ve durum çubuğu bozuluyor mu bak (bilinen sınırlama, ama ne kadar kötü olduğunu bilmek istiyorum).
 - [ ] **A3** — Açık ve koyu modda (Sistem Ayarları → Görünüm) metin, kod blokları, tablo, alıntı çizgisi okunaklı.
 - [ ] **A4** — Pencereyi daralt/genişlet: metin ortalı kalıyor, resimler genişliğe göre küçülüyor.
 
@@ -39,6 +40,15 @@ Son güncelleme: 21 Kasım 2026 (Türkçe arayüz, hızlı açma, başlığa gö
 - [ ] **T4** — Araç çubuğuna sağ tık → Customize Toolbar: düğmeler eklenip çıkarılabiliyor.
 - [ ] **T5** — Durum çubuğunda satır/sütun, kelime, karakter sayısı güncelleniyor; metin seçince seçimin sayıları görünüyor.
 - [ ] **T6** — Durum çubuğundaki dosya yoluna tıkla: Finder'da dosya seçili açılıyor.
+
+## F. Odak modu ve yazı genişliği
+
+- [ ] **F1** — ⇧⌘D: araç çubuğu ve durum çubuğu kayboluyor, imlecin olduğu paragraf parlak, geri kalan her şey (resimler dahil) soluk.
+- [ ] **F2** — Odak modunda ok tuşlarıyla paragraflar arasında gez: parlak alan imleçle birlikte kayıyor, titreme yok. Başlık satırında yalnızca o başlık, listede yalnızca o madde parlak.
+- [ ] **F3** — Odak modunda yaz: yeni satırlar parlak alanda kalıyor; boş satır bırakıp yazınca yeni paragraf parlıyor.
+- [ ] **F4** — Esc ya da tekrar ⇧⌘D: her şey normale dönüyor, araç çubuğu ve durum çubuğu geri geliyor. Tamamlama listesi açıkken Esc önce yalnızca listeyi kapatıyor.
+- [ ] **F5** — Görüntü → Yazı Genişliği (⌥⌘1–4): Dar, Orta, Geniş, Tam Genişlik; metin sütunu hemen değişiyor, resimler yeni genişliğe uyuyor. Seçili olanın yanında onay işareti var.
+- [ ] **F6** — İki not açıkken genişliği değiştir: ikisi de değişiyor. Uygulamayı kapatıp açınca seçim korunuyor.
 
 ## L. Linkler
 

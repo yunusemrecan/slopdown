@@ -19,6 +19,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     /// Headings of the note for preview scrolling, with the parse they came from.
     var headingCache: (generation: Int, list: [HeadingInfo]) = (-1, [])
     private var watcher: DirectoryWatcher?
+    /// Focus mode: only the caret's block is bright; toolbar and status bar are hidden.
+    var focusMode = false
 
     /// Characters changed but the parser has not run yet (element ranges are stale).
     private(set) var parseIsStale = false
@@ -100,6 +102,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
 
         scroll.documentView = tv
         scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(textWidthSettingChanged(_:)),
+                                               name: .sdTextWidthChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(editorScrolled(_:)),
                                                name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         let pane = PreviewPane(frame: NSRect(x: 0, y: 0, width: 400, height: split.bounds.height))
@@ -317,6 +321,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        if focusMode { updateFocusBlock() }
         if !parseIsStale { updateStatus(textChanged: false) }
         if !parseIsStale, completionVisible { updateCompletion() }
         guard !parseIsStale, !styler.sourceMode else { return }

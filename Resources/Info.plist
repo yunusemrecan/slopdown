@@ -8,6 +8,16 @@
     <array>
         <string>en</string>
         <string>tr</string>
+        <string>de</string>
+        <string>fr</string>
+        <string>es</string>
+        <string>it</string>
+        <string>pt</string>
+        <string>ru</string>
+        <string>ar</string>
+        <string>ja</string>
+        <string>zh-Hans</string>
+        <string>ko</string>
     </array>
     <key>CFBundleDisplayName</key>
     <string>Slopdown</string>

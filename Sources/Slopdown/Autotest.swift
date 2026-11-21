@@ -128,7 +128,39 @@ enum Autotest {
             log("\(base): caret at \(tag) line: \(ns.substring(with: ns.lineRange(for: e.range)).trimmingCharacters(in: .newlines))")
         }
         tv.setSelectedRange(NSRange(location: 0, length: 0))
-        if base == "Welcome" { formattingTest(editor) }
+        if base == "Welcome" { focusAndWidthTest(editor); formattingTest(editor) }
+    }
+
+    private static func focusAndWidthTest(_ editor: EditorWindowController) {
+        guard let tv = editor.textView, let tc = tv.textContainer else { return }
+        let saved = Theme.textWidth
+        let widthOf = { tc.size.width }
+        Theme.textWidth = .narrow
+        let narrow = widthOf()
+        Theme.textWidth = .wide
+        let wide = widthOf()
+        Theme.textWidth = .full
+        let full = widthOf()
+        check("width-narrow", abs(narrow - 560) < 1, "\(narrow)")
+        check("width-order", narrow < wide && wide <= full && full >= tv.bounds.width - 60,
+              "\(narrow) \(wide) \(full) of \(tv.bounds.width)")
+        Theme.textWidth = .narrow
+        snapshot(editor, "Welcome-narrow")
+        Theme.textWidth = saved
+
+        let ns = tv.string as NSString
+        let anchor = ns.range(of: "\n\n").location
+        let target = anchor == NSNotFound ? 0 : anchor + 3
+        tv.setSelectedRange(NSRange(location: target, length: 0))
+        editor.toggleFocusMode(nil)
+        let expected = Focus.block(in: ns, at: target)
+        check("focus-block", editor.focusMode && tv.focusBlock == expected, "\(String(describing: tv.focusBlock))")
+        check("focus-chrome", editor.window?.toolbar?.isVisible == false && editor.statusBar.isHidden)
+        tv.scrollRangeToVisible(expected)
+        snapshot(editor, "Welcome-focus")
+        tv.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        check("focus-escape", !editor.focusMode && tv.focusBlock == nil
+              && editor.window?.toolbar?.isVisible == true && !editor.statusBar.isHidden)
     }
 
     static func check(_ name: String, _ ok: Bool, _ detail: String = "") {

@@ -129,8 +129,13 @@ status bar shows *Hugo · … links*).
   and line counts, and counts for the selection.
 - macOS autosave, versions, rename / move, and reloading files that changed on disk.
 - **Quick Open** (⌘P) for notes in the folder or pages of the Hugo site, **Go to Heading** (⇧⌘O).
-- English and **Turkish** interface, following the system language. The **About** window
-  shows the vibe-coded notice in your language (12 languages).
+- **Focus mode** (⇧⌘D): only the paragraph, heading or list item you are writing stays
+  bright; the toolbar and status bar step aside. Esc leaves it.
+- **Text width** (View ▸ Text Width, ⌥⌘1–4): narrow, medium, wide or the full window,
+  remembered for all windows.
+- Interface in 12 languages, following the system language: English, Turkish, German,
+  French, Spanish, Italian, Portuguese, Russian, Arabic, Japanese, Simplified Chinese and
+  Korean. The **About** window shows the vibe-coded notice in the same languages.
 
 ## Safety
 
@@ -171,6 +176,8 @@ Every formatting command toggles: use it again to remove it. All edits can be un
 | ⌘E | Source mode |
 | ⌘P | Quick Open |
 | ⇧⌘O | Go to Heading |
+| ⇧⌘D · Esc | Focus mode on · off |
+| ⌥⌘1 · ⌥⌘2 · ⌥⌘3 · ⌥⌘4 | Text width: narrow · medium · wide · full |
 | ⇧⌘P | Preview pane (Hugo) |
 | ⌥⌘P | Preview in browser (Hugo) |
 
@@ -183,7 +190,9 @@ Format menu. Images can also be pasted or dropped.
 - Embeds render only when they are alone on their line; nested embeds are not expanded.
 - The preview pane matches headings; between two headings it scrolls proportionally, so
   long sections with large images or shortcodes can be a little off.
-- Only English and Turkish interface translations so far (`Resources/<lang>.lproj`).
+- The translations other than Turkish were written by the AI as well and have not been
+  checked by native speakers; corrections are welcome (`Resources/<lang>.lproj`). The Arabic
+  interface is not laid out right-to-left everywhere yet.
 - No Zola or 11ty mode yet; there, notes behave as plain folders.
 
 ## Build from source

@@ -2,6 +2,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import SlopdownCore
 
 extension NSAttributedString.Key {
     /// Character is laid out as a null glyph (syntax hidden in live preview).
@@ -34,6 +35,15 @@ enum Theme {
     static let monoSize: CGFloat = 13.5
     /// Max width of a text line, Obsidian-style "readable line length".
     static let readableWidth: CGFloat = 720
+
+    /// Column width chosen in View ▸ Text Width (shared by all windows).
+    static var textWidth: TextWidth {
+        get { TextWidth(stored: UserDefaults.standard.string(forKey: TextWidth.defaultsKey)) }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: TextWidth.defaultsKey)
+            NotificationCenter.default.post(name: .sdTextWidthChanged, object: nil)
+        }
+    }
 
     static var bodyFont: NSFont { .systemFont(ofSize: bodySize) }
     static var monoFont: NSFont { .monospacedSystemFont(ofSize: monoSize, weight: .regular) }
@@ -71,5 +81,8 @@ enum Theme {
             ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.035)
     }
     static var quoteBar: NSColor { .tertiaryLabelColor }
+}
+extension Notification.Name {
+    static let sdTextWidthChanged = Notification.Name("SlopdownTextWidthChanged")
 }
 #endif

@@ -22,8 +22,16 @@ for strings in glob.glob(os.path.join(root, "Resources/*.lproj/Localizable.strin
     lang = os.path.basename(os.path.dirname(strings)).split(".")[0]
     if lang == "en":
         continue
-    have = set(re.findall(r'^"((?:[^"\\]|\\.)*)"\s*=', open(strings, encoding="utf-8").read(), re.M))
+    pairs = dict(re.findall(r'^"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)";\s*$',
+                            open(strings, encoding="utf-8").read(), re.M))
+    have = set(pairs)
     missing = sorted(keys - have)
+    # Placeholders (%@, %d, positional %1$@) must match the English key.
+    spec = re.compile(r'%(?:\d\$)?([@d])')
+    for k in sorted(keys & have):
+        if sorted(spec.findall(k)) != sorted(spec.findall(pairs[k])):
+            failed = True
+            print(f"{lang}: placeholders differ in {k!r}: {pairs[k]!r}")
     if missing:
         failed = True
         print(f"{lang}: {len(missing)} missing translation(s):")

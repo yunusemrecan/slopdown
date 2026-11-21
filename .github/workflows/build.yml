@@ -54,12 +54,18 @@ jobs:
           if grep -q "FAIL" autotest.log; then echo "Autotest failures"; exit 1; fi
           test -f screenshots/Welcome-0.png || { echo "No screenshots written"; exit 1; }
 
-      - name: Turkish UI
+      - name: Translated UI
         run: |
-          SLOPDOWN_AUTOTEST="" SLOPDOWN_AUTOTEST_MENU=1 \
-            perl -e 'alarm 60; exec @ARGV' dist/Slopdown.app/Contents/MacOS/Slopdown -AppleLanguages '(tr)' | tee lang.log
-          grep -q "Dosya | Düzen | Biçim | Görüntü | Pencere | Yardım" lang.log
-          grep -q "Kalın | Satır 3, Sütun 4 | Bu uygulama" lang.log
+          ui() {   # language, expected menu titles, expected strings line
+            SLOPDOWN_AUTOTEST="" SLOPDOWN_AUTOTEST_MENU=1 \
+              perl -e 'alarm 60; exec @ARGV' dist/Slopdown.app/Contents/MacOS/Slopdown -AppleLanguages "($1)" | tee "lang-$1.log"
+            grep -qF "$2" "lang-$1.log" && grep -qF "$3" "lang-$1.log" || { echo "UI not in $1"; exit 1; }
+          }
+          ui tr "Dosya | Düzen | Biçim | Görüntü | Pencere | Yardım" "Kalın | Satır 3, Sütun 4 | Bu uygulama"
+          ui de "Ablage | Bearbeiten | Format | Darstellung | Fenster | Hilfe" "Fett | Z. 3, Sp. 4 | Diese App"
+          ui ja "ファイル | 編集 | フォーマット | 表示 | ウインドウ | ヘルプ" "太字 | 3 行, 4 列 | このアプリは"
+          ui zh-Hans "文件 | 编辑 | 格式 | 显示 | 窗口 | 帮助" "粗体 | 第 3 行，第 4 列 | 本应用"
+          ui ar "ملف | تحرير | تنسيق | عرض | نافذة | مساعدة" "عريض | السطر 3، العمود 4 | هذا التطبيق"
 
       - name: Build release app (no self-test)
         run: |
