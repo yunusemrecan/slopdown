@@ -219,12 +219,17 @@ enum Autotest {
             done()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
-            if !finished { check("pane-timeout", false); finish() }
+            if !finished {
+                if let site = editor.site { log("hugo output:\n" + String(HugoPreview.shared.output(of: site).suffix(1500))) }
+                check("pane-timeout", false, "loads \(loads)")
+                finish()
+            }
         }
         let original = tv.string
         var loads = 0
         pane.onLoad = {
             loads += 1
+            log("pane load \(loads): \(pane.webView.url?.absoluteString ?? "-")")
             if loads == 1 {
                 let url = pane.webView.url?.absoluteString ?? ""
                 check("pane-load", url.hasSuffix("/posts/first/"), url)

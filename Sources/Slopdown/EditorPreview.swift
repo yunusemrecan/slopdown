@@ -66,8 +66,15 @@ extension EditorWindowController {
     }
 
     @objc func savePreview() {
+        #if SLOPDOWN_AUTOTEST
+        Autotest.log("savePreview: visible \(isPreviewVisible) edited \(markdownDocument?.isDocumentEdited == true)")
+        #endif
         guard isPreviewVisible, let doc = markdownDocument, doc.fileURL != nil, doc.isDocumentEdited else { return }
-        doc.autosave(withImplicitCancellability: false) { _ in }
+        doc.autosave(withImplicitCancellability: false) { error in
+            #if SLOPDOWN_AUTOTEST
+            Autotest.log("savePreview: saved, error \(String(describing: error))")
+            #endif
+        }
     }
 
     @objc func editorScrolled(_ note: Notification) {

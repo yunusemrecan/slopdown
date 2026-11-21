@@ -174,6 +174,9 @@ final class HugoPreview {
         pagePaths[key] = nil
     }
 
+    /// Last output of a site's server (diagnostics).
+    func output(of site: HugoSite) -> String { servers[site.root.path]?.output ?? "" }
+
     func stopAll() {
         for s in servers.values where s.process.isRunning { s.process.terminate() }
         servers.removeAll()
