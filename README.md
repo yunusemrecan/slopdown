@@ -29,78 +29,137 @@ A small, native macOS markdown editor with Obsidian-style live preview.
 </details>
 
 Think *CotEditor, but for markdown*: one window per file, no vault, no sidebar, no plugins.
-The page is rendered while you type, and markdown syntax appears only for the element under
-the caret.
+The page is rendered while you type, and the markdown syntax shows up only for the element
+under the caret, like Obsidian's live preview.
 
-## Features (0.1)
+![Slopdown editing a note: toolbar, live preview with images and a table, status bar](docs/screenshots/editor.png)
 
-- **Live preview** in a native `NSTextView` (TextKit 1). Syntax is hidden with null glyphs,
-  so the file on disk is never touched by rendering.
-  - Headings, **bold**, *italic*, ***both***, ~~strike~~, `inline code`
-  - Bullet, numbered and task lists (click the checkbox to toggle it)
-  - Block quotes, horizontal rules, fenced code blocks, YAML frontmatter
-- **Obsidian links**: `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]`, `![[Note]]`,
-  plus `[text](path.md)` and bare URLs.
-  - **⌘-click** follows a link and opens it in a new window.
-  - Targets are looked up relative to the note's folder: first as a path, then by name
-    in its subfolders. Parent folders need an explicit `../` path.
-  - If the target doesn't exist, Slopdown offers to **create the file** (next to the
-    note) or to **choose a file** (and rewrites the link to point to it).
-- **Images**: `![[picture.png]]`, `![[picture.png|300]]`, `![alt|300x200](path.png)`.
-  On their own line they render as a block; inside a sentence they render inline.
-  Remote (http) images are never loaded.
-- **Tables**: pipe tables with `:--`, `:-:`, `--:` alignment render as a grid; the raw
-  markdown comes back while the caret is in the table. Tables wider than the text
-  column stay raw.
-- **Embeds**: `![[Note]]` and `![[Note#Heading]]` on their own line show that note (or
-  section) in a box; ⌘-click the box to open the note.
-- **Toolbar & Format menu**: heading level, bold (⌘B), italic (⌘I), strikethrough (⇧⌘X),
-  code (⌥⌘C), link (⌘K), wiki link (⇧⌘K), embed (⇧⌘E), headings (⌘0–⌘3), bulleted /
-  numbered / task lists and quotes. Each command toggles: using it again removes it.
-- **Status bar**: file path (click to show in Finder), line and column, word / character /
-  line counts, and counts for the selection.
-- **Hugo sites**: a note inside a Hugo site's `content/` folder switches to Hugo mode
-  (status bar: *Hugo · … links*).
-  - Slopdown reads the site's own content and writes links the way the project already
-    does: `relref` / `ref` shortcodes (`{{< >}}` or `{{% %}}`), page paths for Hugo's
-    link render hook (`/posts/foo`), or relative `.md` files. The status bar menu can
-    override this per site.
-  - ⌘K, ⇧⌘K (link to page), and the create / choose dialogs for missing links all write
-    that convention; new pages get TOML or YAML front matter like the site's archetype.
-  - All of these link styles, `static/` and page-bundle images, `{{< figure >}}`, TOML
-    front matter and shortcodes render correctly; `[[wiki links]]` are flagged because
-    Hugo can't build them.
-  - **Preview in Browser** (⌥⌘P, globe button) starts `hugo server` for the site and
-    opens the page; **New Hugo Page…** creates a page with front matter.
-- **Source mode** (View → Source Mode, ⌘E): plain monospaced markdown.
-- macOS autosave, versions, rename / move, and reloading files changed on disk.
+## Download
 
-## Build
+**[Slopdown-macos-arm64.zip](https://github.com/yunusemrecan/slopdown/releases/download/nightly/Slopdown-macos-arm64.zip)**:
+the latest build of `main` (Apple Silicon, macOS 14 or later).
 
-Requires macOS 14+ and Xcode (or the Swift toolchain).
+The app is not signed or notarized. The first time, right-click it and choose **Open**, or run:
+
+```sh
+xattr -dr com.apple.quarantine Slopdown.app
+```
+
+## Features
+
+### Live preview
+
+- Headings, **bold**, *italic*, ***both***, ~~strikethrough~~, `inline code`
+- Bulleted, numbered and task lists; click a checkbox to tick it
+- Block quotes, horizontal rules, fenced code blocks, YAML and TOML front matter
+- Pipe tables with `:--` / `:-:` / `--:` alignment, drawn as a grid
+- **Images**: `![[pic.png]]`, `![[pic.png|300]]`, `![alt|300x200](pic.png)`. On their own
+  line they render as a block, inside a sentence they render inline. Remote (http) images
+  are never loaded.
+- **Embeds**: `![[Note]]` or `![[Note#Heading]]` on its own line shows that note (or
+  section) in a box.
+- **Source mode** (⌘E) shows the plain markdown in a monospaced font.
+
+Rendering never changes the file: syntax is hidden at layout time, so what is saved is
+exactly what you typed.
+
+<img src="docs/screenshots/caret.png" width="49%" alt="With the caret in the table, it shows as markdown"> <img src="docs/screenshots/embeds.png" width="49%" alt="Embedded notes">
+
+### Links (Obsidian style)
+
+- `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]`, `[text](path.md)` and bare URLs.
+- **⌘-click** follows a link and opens the note in its own window.
+- Links are looked up relative to the note's folder: first as a path, then by name in its
+  subfolders. Parent folders need an explicit `../`.
+- If the target doesn't exist, Slopdown offers to **create** it next to the note, or to
+  **choose a file**, in which case it rewrites the link to point there.
+
+### Hugo sites
+
+Open a note from a Hugo site's `content/` folder and Slopdown switches to Hugo mode (the
+status bar shows *Hugo · … links*).
+
+- **Links in the project's own convention.** Slopdown reads the site's content and writes
+  links the way the project already does:
+
+  | The site uses | Slopdown writes |
+  |---|---|
+  | `relref` / `ref` shortcodes | `[Post]({{< relref "/posts/post" >}})`, with the site's own `{{< >}}` or `{{% %}}` and logical or `.md` paths |
+  | Hugo's link render hook | `[Post](/posts/post)` |
+  | Relative files | `[Post](../post.md)` |
+
+  A site with no links yet gets page paths if the render hook is on, otherwise `relref`.
+  The status bar menu can override the choice for each site.
+- ⌘K, **Link to Page** (⇧⌘K) and the create / choose dialogs for missing links all use
+  that convention. New pages get front matter (title, date, `draft`) in TOML or YAML,
+  following the site's archetype.
+- `static/` and page-bundle images, `{{< figure >}}`, TOML front matter and shortcodes
+  render correctly. `[[wiki links]]` are marked in orange because Hugo can't build them.
+- **Preview in Browser** (⌥⌘P, globe button) starts `hugo server` for the site and opens
+  the page; the server stops when you quit. **File → New Hugo Page…** creates a page.
+
+![A Hugo page: relref links, a missing page, a flagged wiki link, a figure and a shortcode](docs/screenshots/hugo.png)
+
+### Window
+
+- **Toolbar** with formatting buttons (right-click → Customize Toolbar to change it).
+- **Status bar**: file path (click to show in Finder), line and column, word, character
+  and line counts, and counts for the selection.
+- macOS autosave, versions, rename / move, and reloading files that changed on disk.
+- The **About** window shows the vibe-coded notice in your language.
+
+## Keyboard shortcuts
+
+Every formatting command toggles: use it again to remove it. All edits can be undone.
+
+| Shortcut | Command |
+|---|---|
+| ⌘B · ⌘I · ⇧⌘X · ⌥⌘C | Bold · Italic · Strikethrough · Inline code |
+| ⌘K | Link (`[]()`, or the site's ref shortcode in Hugo) |
+| ⇧⌘K | Wiki link; **Link to Page…** in a Hugo site |
+| ⌥⌘K | Link to Note… (choose a file) |
+| ⇧⌘E | Embed `![[ ]]`; **Insert Image…** in a Hugo site |
+| ⌥⌘I | Insert Image… |
+| ⌘0 · ⌘1 · ⌘2 · ⌘3 | Paragraph · Heading 1–3 (4–6 in the Format menu) |
+| ⌘-click | Follow a link, or open an embedded note |
+| ⌘E | Source mode |
+| ⌥⌘P | Preview in browser (Hugo) |
+
+Bulleted, numbered and task lists and quotes are in the toolbar and the Format menu.
+
+## Known limitations
+
+- Tables wider than the text column stay as markdown.
+- Embeds render only when they are alone on their line; nested embeds are not expanded.
+- Hugo preview guesses the page URL from the file path. A page `slug`, a `url`, custom
+  `permalinks` or a multilingual setup can send the browser to the wrong page.
+- No Zola or 11ty mode yet; there, notes behave as plain folders.
+
+## Build from source
+
+Requires macOS 14 or later and Xcode (or the Swift toolchain).
 
 ```sh
 scripts/build_app.sh            # → dist/Slopdown.app
 open dist/Slopdown.app Samples/Welcome.md
+swift test                      # parser, formatting and Hugo tests (also run on Linux)
 ```
 
-`swift test` runs the parser / link-resolution tests (these also run on Linux).
+Since the code is written without a Mac at hand, CI checks it visually as well:
+`SLOPDOWN_AUTOTEST="/abs/note.md:…" SLOPDOWN_AUTOTEST_OUT=dir` makes the app render each
+note at several scroll positions into PNG files, run formatting and Hugo checks (including
+a real `hugo server`), and quit. The images are uploaded as the `screenshots` artifact, and
+the screenshots in this README come from there.
 
-CI also runs a visual self-test: `SLOPDOWN_AUTOTEST="/abs/note.md" SLOPDOWN_AUTOTEST_OUT=dir`
-makes the app render each note at several scroll positions into PNG files and quit
-(they are uploaded as the `screenshots` artifact).
-
-Every push to `main` builds a **nightly** release on GitHub. The app is not signed:
-right-click → Open the first time, or `xattr -dr com.apple.quarantine Slopdown.app`.
-
-## Layout
+## Project layout
 
 | Path | What |
 |---|---|
-| `Sources/SlopdownCore` | Markdown / Obsidian parser and link resolver (Foundation only) |
-| `Sources/Slopdown` | AppKit app: document, window, styling, drawing |
-| `Tests/SlopdownCoreTests` | Parser and resolver tests |
-| `Samples/` | Notes to try every feature |
+| `Sources/SlopdownCore` | Parser, link resolution, formatting commands, Hugo site logic (Foundation only, testable on Linux) |
+| `Sources/Slopdown` | AppKit app: document, window, styling and drawing, toolbar, status bar, Hugo preview |
+| `Tests/SlopdownCoreTests` | Unit tests |
+| `Samples/` | Notes that use every feature, and a small Hugo site |
+| `docs/screenshots` | Images used in this README |
 
 ## License
 
