@@ -128,10 +128,10 @@ enum Autotest {
         let original = tv.string
         // Bold a word
         let ns = tv.string as NSString
-        let word = ns.range(of: "Welcome to Slopdown")
-        tv.setSelectedRange(NSRange(location: word.location, length: 7))
+        let word = ns.range(of: "# Welcome to Slopdown")
+        tv.setSelectedRange(NSRange(location: word.location + 2, length: 7))
         editor.formatBold(nil)
-        let l1 = line(containing: "to Slopdown").map { (tv.string as NSString).substring(with: $0) } ?? ""
+        let l1 = line(containing: "# **Welcome** to Slopdown").map { (tv.string as NSString).substring(with: $0) } ?? "(not found)"
         check("bold", l1.hasPrefix("# **Welcome** to Slopdown"), l1.debugDescription)
         snapshot(editor, "Welcome-format-bold")
         editor.formatBold(nil)
