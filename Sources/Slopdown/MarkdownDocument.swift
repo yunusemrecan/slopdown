@@ -11,6 +11,13 @@ final class MarkdownDocument: NSDocument {
 
     override class var autosavesInPlace: Bool { true }
 
+    #if SLOPDOWN_AUTOTEST
+    override func updateChangeCount(_ change: NSDocument.ChangeType) {
+        super.updateChangeCount(change)
+        Autotest.log("updateChangeCount \(change.rawValue) → edited \(isDocumentEdited)")
+    }
+    #endif
+
     var editor: EditorWindowController? {
         windowControllers.first as? EditorWindowController
     }
@@ -31,6 +38,9 @@ final class MarkdownDocument: NSDocument {
 
     override func read(from data: Data, ofType typeName: String) throws {
         let text = String(decoding: data, as: UTF8.self)
+        #if SLOPDOWN_AUTOTEST
+        if editor != nil { Autotest.log("document re-read from disk (\(fileURL?.lastPathComponent ?? "-"))") }
+        #endif
         loadedText = text
         // Revert / file changed on disk while the window is open
         let update: () -> Void = { [weak self] in

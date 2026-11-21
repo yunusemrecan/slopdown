@@ -238,6 +238,7 @@ enum Autotest {
                     // Edit → autosave → hugo rebuild → live reload
                     let end = (tv.string as NSString).length
                     editor.replace(NSRange(location: end, length: 0), with: "\n\nLive edit marker 4711\n", actionName: "")
+                    log("marker edit: edited \(editor.markdownDocument?.isDocumentEdited == true), undo groups \(tv.undoManager?.groupingLevel ?? -1)")
                 }
             } else {
                 pane.webView.evaluateJavaScript("document.body.innerText") { text, _ in
