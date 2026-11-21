@@ -34,16 +34,13 @@ under the caret, like Obsidian's live preview.
 
 ![Slopdown editing a note: toolbar, live preview with images and a table, status bar](docs/screenshots/editor.png)
 
-## Download
+## Before you run it
 
-**[Slopdown-macos-arm64.zip](https://github.com/yunusemrecan/slopdown/releases/download/nightly/Slopdown-macos-arm64.zip)**:
-the latest build of `main` (Apple Silicon, macOS 14 or later).
-
-The app is not signed or notarized. The first time, right-click it and choose **Open**, or run:
-
-```sh
-xattr -dr com.apple.quarantine Slopdown.app
-```
+> [!CAUTION]
+> Again: **Slopdown is vibe-coded.** An AI wrote the code; no human programmer has reviewed
+> it line by line. Run it only if you choose to, on your own judgement and with your own
+> understanding of what that means. Nobody vouches for it, and it comes with no warranty
+> (see the [license](LICENSE)). Keep backups of anything you open with it.
 
 ## Features
 
