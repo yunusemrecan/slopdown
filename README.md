@@ -70,6 +70,16 @@ exactly what you typed.
   subfolders. Parent folders need an explicit `../`.
 - If the target doesn't exist, Slopdown offers to **create** it next to the note, or to
   **choose a file**, in which case it rewrites the link to point there.
+- **Completion**: typing `[[` (or `![[` for images) lists the notes in the folder and its
+  subfolders; ↑↓ to choose, Return or Tab to insert, Esc to close. Matching is fuzzy, and
+  the shortest unique name is inserted, like Obsidian.
+
+### Images
+
+**Paste or drop** an image into a note. A screenshot or copied image is saved as
+`pasted-image-<date>.png`; a dropped file that is already in the note's folder is linked
+where it is, anything else is copied in. Links are written in the note's style:
+`![[…]]` in plain folders, `![](…)` in Hugo (into the page bundle, or `static/images`).
 
 ### Hugo sites
 
@@ -87,8 +97,9 @@ status bar shows *Hugo · … links*).
 
   A site with no links yet gets page paths if the render hook is on, otherwise `relref`.
   The status bar menu can override the choice for each site.
-- ⌘K, **Link to Page** (⇧⌘K) and the create / choose dialogs for missing links all use
-  that convention. New pages get front matter (title, date, `draft`) in TOML or YAML,
+- ⌘K / ⇧⌘K insert a link in that convention, and **completion** lists the site's pages
+  (with their front matter titles) inside `relref "…"` or `](…)`. The create / choose
+  dialogs for missing links use the same convention. New pages get front matter (title, date, `draft`) in TOML or YAML,
   following the site's archetype.
 - `static/` and page-bundle images, `{{< figure >}}`, TOML front matter and shortcodes
   render correctly. `[[wiki links]]` are marked in orange because Hugo can't build them.
@@ -105,7 +116,8 @@ status bar shows *Hugo · … links*).
 
 ### Window
 
-- **Toolbar** with formatting buttons (right-click → Customize Toolbar to change it).
+- **Toolbar**: heading, bold, italic, strikethrough, code, link, wiki link, image, lists,
+  preview pane and source mode (right-click → Customize Toolbar to change it).
 - **Status bar**: file path (click to show in Finder), line and column, word, character
   and line counts, and counts for the selection.
 - macOS autosave, versions, rename / move, and reloading files that changed on disk.
@@ -141,18 +153,18 @@ Every formatting command toggles: use it again to remove it. All edits can be un
 | Shortcut | Command |
 |---|---|
 | ⌘B · ⌘I · ⇧⌘X · ⌥⌘C | Bold · Italic · Strikethrough · Inline code |
-| ⌘K | Link (`[]()`, or the site's ref shortcode in Hugo) |
-| ⇧⌘K | Wiki link; **Link to Page…** in a Hugo site |
-| ⌥⌘K | Link to Note… (choose a file) |
-| ⇧⌘E | Embed `![[ ]]`; **Insert Image…** in a Hugo site |
-| ⌥⌘I | Insert Image… |
+| ⌘K | Link (`[]()`, or the site's ref shortcode in Hugo, with completion) |
+| ⇧⌘K | Wiki link `[[ ]]` with completion; in a Hugo site, a link Hugo can build |
+| ⇧⌘E | Embed `![[ ]]` with completion; in a Hugo site, choose an image |
+| ↑ ↓ · Return / Tab · Esc | Choose, insert, close in the completion list |
 | ⌘0 · ⌘1 · ⌘2 · ⌘3 | Paragraph · Heading 1–3 (4–6 in the Format menu) |
 | ⌘-click | Follow a link, or open an embedded note |
 | ⌘E | Source mode |
 | ⇧⌘P | Preview pane (Hugo) |
 | ⌥⌘P | Preview in browser (Hugo) |
 
-Bulleted, numbered and task lists and quotes are in the toolbar and the Format menu.
+Bulleted, numbered and task lists and quotes are in the toolbar's Lists menu and the
+Format menu. Images can also be pasted or dropped.
 
 ## Known limitations
 
@@ -183,8 +195,8 @@ the screenshots in this README come from there.
 
 | Path | What |
 |---|---|
-| `Sources/SlopdownCore` | Parser, link resolution, formatting commands, Hugo site logic (Foundation only, testable on Linux) |
-| `Sources/Slopdown` | AppKit app: document, window, styling and drawing, toolbar, status bar, Hugo preview |
+| `Sources/SlopdownCore` | Parser (with incremental updates), style plan, link resolution and completion, formatting commands, attachments, Hugo site logic, safety rules. Foundation only, tested on Linux |
+| `Sources/Slopdown` | AppKit app: document, window, applying the style plan and drawing, completion popup, image import, toolbar, status bar, Hugo preview |
 | `Tests/SlopdownCoreTests` | Unit tests |
 | `Samples/` | Notes that use every feature, and a small Hugo site |
 | `docs/screenshots` | Images used in this README |
