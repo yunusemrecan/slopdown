@@ -110,10 +110,64 @@ enum Autotest {
             log("\(base): caret at \(tag) line: \(ns.substring(with: ns.lineRange(for: e.range)).trimmingCharacters(in: .newlines))")
         }
         tv.setSelectedRange(NSRange(location: 0, length: 0))
+        if base == "Welcome" { formattingTest(editor) }
+    }
+
+    /// Formatting commands round-trip (toggle twice = original) and the status bar.
+    private static func formattingTest(_ editor: EditorWindowController) {
+        guard let tv = editor.textView else { return }
+        func line(containing needle: String) -> NSRange? {
+            let ns = tv.string as NSString
+            let r = ns.range(of: needle)
+            return r.location == NSNotFound ? nil : ns.lineRange(for: r)
+        }
+        func check(_ name: String, _ ok: Bool, _ detail: String = "") {
+            log("format-test \(name): \(ok ? "PASS" : "FAIL") \(detail)")
+        }
+
+        let original = tv.string
+        // Bold a word
+        let ns = tv.string as NSString
+        let word = ns.range(of: "Welcome to Slopdown")
+        tv.setSelectedRange(NSRange(location: word.location, length: 7))
+        editor.formatBold(nil)
+        let l1 = line(containing: "to Slopdown").map { (tv.string as NSString).substring(with: $0) } ?? ""
+        check("bold", l1.hasPrefix("# **Welcome** to Slopdown"), l1.debugDescription)
+        snapshot(editor, "Welcome-format-bold")
+        editor.formatBold(nil)
+        check("unbold", tv.string == original)
+
+        // Bullet list on a paragraph line, then off again
+        if let r = line(containing: "a link to open it") {
+            tv.setSelectedRange(NSRange(location: r.location + 3, length: 0))
+            editor.formatBulletList(nil)
+            let l2 = line(containing: "a link to open it").map { (tv.string as NSString).substring(with: $0) } ?? ""
+            check("bullet", l2.hasPrefix("- "), l2.debugDescription)
+            editor.formatBulletList(nil)
+            check("unbullet", tv.string == original)
+        }
+
+        // Heading 2 on the same line
+        if let r = line(containing: "a link to open it") {
+            tv.setSelectedRange(NSRange(location: r.location, length: 0))
+            let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+            item.tag = 2
+            editor.formatHeading(item)
+            let l3 = line(containing: "a link to open it").map { (tv.string as NSString).substring(with: $0) } ?? ""
+            check("heading", l3.hasPrefix("## "), l3.debugDescription)
+            editor.formatHeading(item)
+            check("unheading", tv.string == original)
+        }
+
+        let info = editor.statusBar?.infoLabel.stringValue ?? ""
+        check("statusbar", info.contains("words") && info.contains("Ln "), info.debugDescription)
+        let path = editor.statusBar?.pathButton.title ?? ""
+        check("statuspath", path.hasSuffix("Welcome.md"), path.debugDescription)
     }
 
     private static func snapshot(_ editor: EditorWindowController, _ name: String) {
-        guard let view = editor.window?.contentView else { return }
+        // The window's frame view, so the toolbar is in the picture too.
+        guard let view = editor.window?.contentView?.superview ?? editor.window?.contentView else { return }
         view.layoutSubtreeIfNeeded()
         view.display()
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }

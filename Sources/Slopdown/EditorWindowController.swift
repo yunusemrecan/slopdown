@@ -7,6 +7,8 @@ import SlopdownCore
 final class EditorWindowController: NSWindowController, NSWindowDelegate, NSTextViewDelegate, NSTextStorageDelegate {
     private(set) var textView: EditorTextView!
     private let storage = NSTextStorage()
+    private(set) var statusBar: StatusBarView!
+    private var stats = TextStats("")
     private let layoutManager = NSLayoutManager()
     private let concealer = GlyphConcealer()
     let styler = MarkdownStyler()
@@ -36,7 +38,18 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         container.widthTracksTextView = false
         layoutManager.addTextContainer(container)
 
-        let scroll = NSScrollView(frame: window.contentLayoutRect)
+        window.toolbar = makeToolbar()
+        window.toolbarStyle = .unifiedCompact
+
+        let content = NSView(frame: window.contentLayoutRect)
+        let barHeight = StatusBarView.height
+        let status = StatusBarView(frame: NSRect(x: 0, y: 0, width: content.bounds.width, height: barHeight))
+        status.autoresizingMask = [.width, .maxYMargin]
+        content.addSubview(status)
+        statusBar = status
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: barHeight, width: content.bounds.width,
+                                                height: content.bounds.height - barHeight))
         scroll.autoresizingMask = [.width, .height]
         scroll.hasVerticalScroller = true
         scroll.borderType = .noBorder
@@ -68,7 +81,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         storage.delegate = self
 
         scroll.documentView = tv
-        window.contentView = scroll
+        content.addSubview(scroll)
+        window.contentView = content
         textView = tv
         tv.updateTextWidth()
 
@@ -94,7 +108,21 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     /// The file was saved somewhere else / renamed: links and images resolve differently.
+    // MARK: - Status bar
+
+    private func updateStatus(textChanged: Bool) {
+        guard let tv = textView, let statusBar else { return }
+        let text = tv.string
+        if textChanged { stats = TextStats(text) }
+        let sel = tv.selectedRange()
+        let pos = TextStats.lineAndColumn(text, sel.location)
+        let selected = sel.length > 0 && NSMaxRange(sel) <= (text as NSString).length
+            ? TextStats((text as NSString).substring(with: sel)) : nil
+        statusBar.show(stats: stats, line: pos.line, column: pos.column, selection: selected)
+    }
+
     func documentLocationChanged() {
+        statusBar?.setFile(markdownDocument?.fileURL)
         styler.resolutions.invalidate()
         restyleAll()
     }
@@ -107,6 +135,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         styler.revealed = styler.revealedElements(for: selection)
         styler.apply(to: storage, in: NSRange(location: 0, length: storage.length))
         textView.needsDisplay = true
+        statusBar?.setFile(markdownDocument?.fileURL)
+        updateStatus(textChanged: true)
     }
 
     private var selection: [NSRange] {
@@ -141,6 +171,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        if !parseIsStale { updateStatus(textChanged: false) }
         guard !parseIsStale, !styler.sourceMode else { return }
         let new = styler.revealedElements(for: selection)
         let changed = new.symmetricDifference(styler.revealed)

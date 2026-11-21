@@ -47,8 +47,9 @@ jobs:
           mkdir -p screenshots
           SLOPDOWN_AUTOTEST="$PWD/Samples/Welcome.md:$PWD/Samples/notes/Second Note.md" \
           SLOPDOWN_AUTOTEST_OUT="$PWD/screenshots" \
-            perl -e 'alarm 150; exec @ARGV' dist/Slopdown.app/Contents/MacOS/Slopdown
+            perl -e 'alarm 150; exec @ARGV' dist/Slopdown.app/Contents/MacOS/Slopdown | tee autotest.log
           ls screenshots
+          if grep -q "FAIL" autotest.log; then echo "Autotest failures"; exit 1; fi
           test -f screenshots/Welcome-0.png || { echo "No screenshots written"; exit 1; }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

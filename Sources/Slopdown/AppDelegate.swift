@@ -80,6 +80,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         findItem("Use Selection for Find", "e", .setSearchString, [.command, .option])
         edit.addItem(withTitle: "Find", action: nil, keyEquivalent: "").submenu = find
 
+        // Format
+        let format = submenu(main, "Format")
+        func fmt(_ title: String, _ action: Selector, _ key: String = "", _ mods: NSEvent.ModifierFlags = .command, tag: Int = 0) {
+            let item = format.addItem(withTitle: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = mods
+            item.tag = tag
+        }
+        fmt("Bold", #selector(EditorWindowController.formatBold(_:)), "b")
+        fmt("Italic", #selector(EditorWindowController.formatItalic(_:)), "i")
+        fmt("Strikethrough", #selector(EditorWindowController.formatStrikethrough(_:)), "X")
+        fmt("Inline Code", #selector(EditorWindowController.formatCode(_:)), "c", [.command, .option])
+        format.addItem(.separator())
+        fmt("Link", #selector(EditorWindowController.formatLink(_:)), "k")
+        fmt("Wiki Link", #selector(EditorWindowController.formatWikiLink(_:)), "K")
+        fmt("Embed", #selector(EditorWindowController.formatEmbed(_:)), "E")
+        format.addItem(.separator())
+        fmt("Paragraph", #selector(EditorWindowController.formatHeading(_:)), "0", tag: 0)
+        for level in 1...6 {
+            fmt("Heading \(level)", #selector(EditorWindowController.formatHeading(_:)),
+                level <= 3 ? "\(level)" : "", tag: level)
+        }
+        format.addItem(.separator())
+        fmt("Bulleted List", #selector(EditorWindowController.formatBulletList(_:)))
+        fmt("Numbered List", #selector(EditorWindowController.formatNumberedList(_:)))
+        fmt("Task List", #selector(EditorWindowController.formatTaskList(_:)))
+        fmt("Quote", #selector(EditorWindowController.formatQuote(_:)))
+
         // View
         let view = submenu(main, "View")
         view.delegate = self
