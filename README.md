@@ -92,10 +92,16 @@ status bar shows *Hugo · … links*).
   following the site's archetype.
 - `static/` and page-bundle images, `{{< figure >}}`, TOML front matter and shortcodes
   render correctly. `[[wiki links]]` are marked in orange because Hugo can't build them.
-- **Preview in Browser** (⌥⌘P, globe button) starts `hugo server` for the site and opens
-  the page; the server stops when you quit. **File → New Hugo Page…** creates a page.
+- **Preview pane** (⇧⌘P, sidebar button) shows the page the way the site renders it, with
+  its own theme, from `hugo server`. Edits are saved a moment after you type, so Hugo
+  rebuilds and the pane reloads by itself. It follows the editor's scroll position.
+- **Preview in Browser** (⌥⌘P, globe button) opens the same page in your browser. The
+  page address comes from `hugo list all`, so `slug`, `url` and `permalinks` are honoured.
+  The server stops when you quit. **File → New Hugo Page…** creates a page.
 
 ![A Hugo page: relref links, a missing page, a flagged wiki link, a figure and a shortcode](docs/screenshots/hugo.png)
+
+![The preview pane next to the editor, showing the page from hugo server](docs/screenshots/hugo-pane.png)
 
 ### Window
 
@@ -120,6 +126,7 @@ Every formatting command toggles: use it again to remove it. All edits can be un
 | ⌘0 · ⌘1 · ⌘2 · ⌘3 | Paragraph · Heading 1–3 (4–6 in the Format menu) |
 | ⌘-click | Follow a link, or open an embedded note |
 | ⌘E | Source mode |
+| ⇧⌘P | Preview pane (Hugo) |
 | ⌥⌘P | Preview in browser (Hugo) |
 
 Bulleted, numbered and task lists and quotes are in the toolbar and the Format menu.
@@ -128,8 +135,9 @@ Bulleted, numbered and task lists and quotes are in the toolbar and the Format m
 
 - Tables wider than the text column stay as markdown.
 - Embeds render only when they are alone on their line; nested embeds are not expanded.
-- Hugo preview guesses the page URL from the file path. A page `slug`, a `url`, custom
-  `permalinks` or a multilingual setup can send the browser to the wrong page.
+- The preview pane keeps its place by relative scroll position, not by matching
+  paragraphs, so on pages with large images or shortcodes it can be a little off.
+- Multilingual Hugo sites (`post.tr.md`) are not handled specially yet.
 - No Zola or 11ty mode yet; there, notes behave as plain folders.
 
 ## Build from source
