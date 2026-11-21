@@ -8,6 +8,8 @@ import AppKit
 @objc(MarkdownDocument)
 final class MarkdownDocument: NSDocument {
     private var loadedText = ""
+    /// Text as last read from or written to disk.
+    private(set) var diskText = ""
 
     override class var autosavesInPlace: Bool { true }
 
@@ -33,6 +35,7 @@ final class MarkdownDocument: NSDocument {
             editor.textView.breakUndoCoalescing()
             loadedText = editor.currentText
         }
+        diskText = loadedText
         return Data(loadedText.utf8)
     }
 
@@ -42,6 +45,7 @@ final class MarkdownDocument: NSDocument {
         if editor != nil { Autotest.log("document re-read from disk (\(fileURL?.lastPathComponent ?? "-"))") }
         #endif
         loadedText = text
+        diskText = text
         // Revert / file changed on disk while the window is open
         let update: () -> Void = { [weak self] in
             guard let editor = self?.editor else { return }

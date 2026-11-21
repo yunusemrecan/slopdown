@@ -67,9 +67,13 @@ extension EditorWindowController {
 
     @objc func savePreview() {
         #if SLOPDOWN_AUTOTEST
-        Autotest.log("savePreview: visible \(isPreviewVisible) edited \(markdownDocument?.isDocumentEdited == true)")
+        Autotest.log("savePreview: visible \(isPreviewVisible) edited \(markdownDocument?.isDocumentEdited == true) undo level \(textView.undoManager?.groupingLevel ?? -1)")
         #endif
-        guard isPreviewVisible, let doc = markdownDocument, doc.fileURL != nil, doc.isDocumentEdited else { return }
+        guard isPreviewVisible, let doc = markdownDocument, doc.fileURL != nil else { return }
+        // Compare with what is on disk rather than trusting the edited flag, which only
+        // updates when the undo group closes.
+        guard currentText != doc.diskText else { return }
+        if !doc.isDocumentEdited { doc.updateChangeCount(.changeDone) }
         doc.autosave(withImplicitCancellability: false) { error in
             #if SLOPDOWN_AUTOTEST
             Autotest.log("savePreview: saved, error \(String(describing: error))")
