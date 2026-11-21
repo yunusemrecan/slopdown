@@ -327,6 +327,10 @@ extension EditorWindowController: NSToolbarDelegate {
             if let window { alert.beginSheetModal(for: window) }
             return
         }
+        guard Self.isTrusted(site) else {
+            askToTrust(site) { [weak self] in self?.previewInBrowser(sender) }
+            return
+        }
         markdownDocument?.autosave(withImplicitCancellability: false) { _ in }
         HugoPreview.shared.preview(page, in: site, window: window)
     }

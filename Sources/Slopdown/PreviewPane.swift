@@ -73,16 +73,31 @@ final class PreviewPane: NSView, WKNavigationDelegate {
         onLoad?()
     }
 
+    /// The pane only ever shows the local hugo server. A page (or a script in it) can't
+    /// take the pane anywhere else; a link the user clicks to another site opens in the
+    /// browser, and only for http(s).
+    static func isLocalServer(_ url: URL?) -> Bool {
+        guard let url, url.scheme?.lowercased() == "http" else { return false }
+        return url.host == "localhost" || url.host == "127.0.0.1"
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        // Links to other sites open in the browser; the site itself stays in the pane.
-        if let url = action.request.url, action.navigationType == .linkActivated,
-           let host = url.host, host != "localhost", host != "127.0.0.1" {
-            NSWorkspace.shared.open(url)
-            decisionHandler(.cancel)
+        let url = action.request.url
+        // Frames inside the page (e.g. embedded videos) stay inside the page.
+        if let frame = action.targetFrame, !frame.isMainFrame {
+            decisionHandler(.allow)
             return
         }
-        decisionHandler(.allow)
+        if Self.isLocalServer(url) {
+            decisionHandler(.allow)
+            return
+        }
+        decisionHandler(.cancel)
+        if action.navigationType == .linkActivated, let url,
+           ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

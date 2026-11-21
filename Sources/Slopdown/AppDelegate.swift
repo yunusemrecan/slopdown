@@ -15,14 +15,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if SLOPDOWN_AUTOTEST
         if Autotest.isActive { Autotest.run() }
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         HugoPreview.shared.stopAll()
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { !Autotest.isActive }
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        #if SLOPDOWN_AUTOTEST
+        return !Autotest.isActive
+        #else
+        return true
+        #endif
+    }
 
     // MARK: - Menu
 

@@ -261,6 +261,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
                 : "The preview pane shows a page the way its Hugo site renders it.\nThis note isn’t in a Hugo site’s content folder.")
             return
         }
+        guard Self.isTrusted(site) else {
+            previewPane.showMessage("The preview needs permission to run this site’s build.")
+            askToTrust(site) { [weak self] in self?.reloadPreview() }
+            return
+        }
         previewPane.showMessage("Starting hugo server…")
         markdownDocument?.autosave(withImplicitCancellability: false) { _ in }
         HugoPreview.shared.url(of: page, in: site) { [weak self] url, output in
@@ -383,7 +388,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         let heading = LinkContext.heading(of: link)
 
         if context.isExternal(link) {
-            if let url = URL(string: target) { NSWorkspace.shared.open(url) }
+            openExternal(target)
             return
         }
         if target.isEmpty {
@@ -398,17 +403,20 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
             return
         }
         if let url = context.resolve(link) {
-            Self.open(url, heading: heading)
+            openTarget(url, heading: heading)
         } else {
             askAboutMissing(target: target, link: link, base: site?.contentDir ?? base, heading: heading)
         }
     }
 
+    /// Notes open in Slopdown; anything else goes through the safety rules.
+    func openTarget(_ url: URL, heading: String? = nil) {
+        if LinkResolver.isMarkdownFile(url) { Self.open(url, heading: heading) } else { openLocalFile(url) }
+    }
+
+    /// Opens a markdown/text note in its own window.
     static func open(_ url: URL, heading: String? = nil) {
-        guard LinkResolver.isMarkdownFile(url) else {
-            NSWorkspace.shared.open(url)
-            return
-        }
+        guard LinkResolver.isMarkdownFile(url) else { return }
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { doc, _, error in
             if let error {
                 NSApp.presentError(error)
@@ -424,9 +432,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         guard let window else { return }
         let alert = NSAlert()
         alert.messageText = "“\(target)” doesn’t exist"
-        alert.informativeText = site == nil
+        var info = site == nil
             ? "No matching file in “\(base.lastPathComponent)” or its subfolders."
             : "No page with this path in the site’s “\(base.lastPathComponent)” folder."
+        if let newURL = linkContext.newFileURL(for: link) {
+            info += "\n\nA new file would be created at:\n" + (newURL.path as NSString).abbreviatingWithTildeInPath
+            if !LinkSafety.isInside(newURL, creationRoot) {
+                info += "\n\n⚠︎ That is outside “\(creationRoot.lastPathComponent)”."
+            }
+        }
+        alert.informativeText = info
         alert.addButton(withTitle: site == nil ? "Create New File" : "Create New Page")
         alert.addButton(withTitle: "Choose File…")
         alert.addButton(withTitle: "Cancel")
@@ -443,10 +458,24 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         }
     }
 
+    /// New files from links belong here: the note's folder, or the site's content folder.
+    var creationRoot: URL {
+        site?.contentDir ?? markdownDocument?.fileURL?.deletingLastPathComponent() ?? URL(fileURLWithPath: NSHomeDirectory())
+    }
+
     private func createFile(for link: MDLink) {
         let context = linkContext
         guard let url = context.newFileURL(for: link) else { return }
-        createAndOpen(url, contents: context.newFileContents(for: url))
+        let create = { self.createAndOpen(url, contents: context.newFileContents(for: url)) }
+        guard LinkSafety.isInside(url, creationRoot) else {
+            // A link like [[../../Library/x]] must not quietly create files elsewhere.
+            confirm(title: "Create a file outside “\(creationRoot.lastPathComponent)”?",
+                    detail: "The link points outside the note’s folder. The file would be created at:\n\n"
+                        + (url.path as NSString).abbreviatingWithTildeInPath,
+                    button: "Create File", perform: create)
+            return
+        }
+        create()
     }
 
     func createAndOpen(_ url: URL, contents: String) {
@@ -458,7 +487,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
             }
             styler.resolutions.invalidate()
             restyleAll()   // the link is no longer "unresolved"
-            Self.open(url)
+            openTarget(url)
         } catch {
             NSApp.presentError(error)
         }
@@ -478,7 +507,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
             if let newTarget = self.linkContext.retarget(link, to: url) {
                 self.replace(link.targetRange, with: newTarget, actionName: "Change Link")
             }
-            Self.open(url, heading: heading)
+            self.openTarget(url, heading: heading)
         }
     }
 

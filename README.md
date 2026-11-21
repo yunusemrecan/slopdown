@@ -111,6 +111,27 @@ status bar shows *Hugo · … links*).
 - macOS autosave, versions, rename / move, and reloading files that changed on disk.
 - The **About** window shows the vibe-coded notice in your language.
 
+## Safety
+
+Notes can come from anyone, and a link's text can hide where it really goes. Slopdown
+therefore never does anything risky on a single click:
+
+- **⌘-clicking a link**: `http`, `https` and `mailto` open directly. Any other address
+  (another app's URL scheme, `file:`, `ssh:` …) is shown in full and needs a confirmation.
+  Images, PDFs and media open; other documents are confirmed; apps, scripts, installers and
+  folders are never opened, only shown in Finder.
+- **Rendering**: remote images are never loaded. Images and embeds from hidden folders
+  (`~/.ssh`, `.git` …), `~/Library`, system folders and other users' folders are not shown.
+- **Missing links**: the dialog shows where the new file would go. Creating one outside the
+  note's folder (or the site's `content/`) needs a second confirmation. Existing files are
+  never overwritten.
+- **Hugo**: building a site can run code that comes with it (PostCSS/Babel settings, Hugo
+  modules, tools the site allows), so the first preview of each site asks first. `hugo server`
+  only listens on `127.0.0.1`, and the preview pane cannot be sent to any other site.
+- The app is signed with the hardened runtime. The self-test mode used by CI is not
+  compiled into released builds. Very long lines are not styled, so a huge file can't
+  freeze typing.
+
 ## Keyboard shortcuts
 
 Every formatting command toggles: use it again to remove it. All edits can be undone.

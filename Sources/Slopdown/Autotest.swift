@@ -7,7 +7,7 @@
 // Opens each file, renders the window at several scroll positions (and with the caret
 // on a few interesting lines) into PNG files, logs some layout facts, then quits.
 
-#if canImport(AppKit)
+#if canImport(AppKit) && SLOPDOWN_AUTOTEST
 import AppKit
 import SlopdownCore
 
@@ -125,6 +125,7 @@ enum Autotest {
         guard let tv = editor.textView else { done(); return }
         check("hugo-site", editor.site != nil, editor.site?.root.path ?? "nil")
         guard let site = editor.site else { done(); return }
+        EditorWindowController.setTrusted(site)
         check("hugo-style", editor.conventions?.style == .relref, String(describing: editor.conventions))
 
         let ctx = editor.linkContext
@@ -220,11 +221,17 @@ enum Autotest {
                     let ok = (text as? String)?.contains("Live edit marker 4711") == true
                     guard ok || loads > 4 else { return }   // wait for the reload that has the edit
                     check("pane-livereload", ok, "after \(loads) loads")
+                    // A script must not be able to take the pane to another site.
+                    pane.webView.evaluateJavaScript("window.location.href = 'https://example.com/'; true", completionHandler: nil)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    let still = pane.webView.url?.absoluteString ?? ""
+                    check("pane-stays-local", PreviewPane.isLocalServer(pane.webView.url), still)
                     paneSnapshot(editor) {
                         editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
                         editor.markdownDocument?.autosave(withImplicitCancellability: false) { _ in
                             DispatchQueue.main.async { finish() }
                         }
+                    }
                     }
                 }
             }
@@ -313,6 +320,10 @@ enum Autotest {
             about.close()
         }
         check("disclaimer", Disclaimer.text(for: ["tr"]).hasPrefix("Bu uygulama"))
+        let home = NSHomeDirectory()
+        check("safety-render", !LinkSafety.isRenderable(URL(fileURLWithPath: home + "/.ssh/id_rsa"))
+              && LinkSafety.isRenderable(URL(fileURLWithPath: home + "/Notes/a.png")))
+        check("safety-url", LinkSafety.action(forURL: "ssh://x") == .confirm && LinkSafety.action(forURL: "https://x") == .open)
 
         let info = editor.statusBar?.infoLabel.stringValue ?? ""
         check("statusbar", info.contains("words") && info.contains("Ln "), info.debugDescription)

@@ -36,11 +36,8 @@ jobs:
       - name: Tests
         run: swift test
 
-      - name: Build app bundle
-        run: |
-          VERSION="0.1.0+$(git rev-parse --short HEAD)"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF#refs/tags/v}"; fi
-          SLOPDOWN_VERSION="$VERSION" scripts/build_app.sh --arch arm64
+      - name: Build test app (with the self-test compiled in)
+        run: scripts/build_app.sh --arch arm64 --autotest
 
       - name: Install Hugo (for the preview test)
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install hugo && hugo version
@@ -54,6 +51,17 @@ jobs:
           ls screenshots
           if grep -q "FAIL" autotest.log; then echo "Autotest failures"; exit 1; fi
           test -f screenshots/Welcome-0.png || { echo "No screenshots written"; exit 1; }
+
+      - name: Build release app (no self-test)
+        run: |
+          VERSION="0.1.0+$(git rev-parse --short HEAD)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF#refs/tags/v}"; fi
+          SLOPDOWN_VERSION="$VERSION" scripts/build_app.sh --arch arm64
+          # The released app must not contain the self-test and must use the hardened runtime.
+          if strings dist/Slopdown.app/Contents/MacOS/Slopdown | grep -q SLOPDOWN_AUTOTEST; then
+            echo "Release build contains the self-test"; exit 1
+          fi
+          codesign -dv dist/Slopdown.app 2>&1 | tee /dev/stderr | grep -q "flags=.*runtime"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

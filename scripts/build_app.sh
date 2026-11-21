@@ -13,11 +13,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ARCH="arm64"
 CONFIG="release"
 VERSION="${SLOPDOWN_VERSION:-0.1.0}"
+AUTOTEST=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --arch) ARCH="$2"; shift 2 ;;
         --debug) CONFIG="debug"; shift ;;
+        --autotest) AUTOTEST=1; shift ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
@@ -29,8 +31,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 echo "==> Building ($CONFIG, $ARCH)"
-swift build --package-path "$ROOT" -c "$CONFIG" --arch "$ARCH" --product Slopdown
-BIN_DIR="$(swift build --package-path "$ROOT" -c "$CONFIG" --arch "$ARCH" --show-bin-path)"
+# The visual self-test (SLOPDOWN_AUTOTEST) is compiled in only for CI test builds.
+FLAGS=()
+if [[ "$AUTOTEST" == 1 ]]; then FLAGS=(-Xswiftc -DSLOPDOWN_AUTOTEST); fi
+swift build --package-path "$ROOT" -c "$CONFIG" --arch "$ARCH" --product Slopdown ${FLAGS[@]+"${FLAGS[@]}"}
+BIN_DIR="$(swift build --package-path "$ROOT" -c "$CONFIG" --arch "$ARCH" --show-bin-path ${FLAGS[@]+"${FLAGS[@]}"})"
 cp "$BIN_DIR/Slopdown" "$APP/Contents/MacOS/Slopdown"
 
 echo "==> Info.plist"
@@ -41,7 +46,8 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 iconutil -c icns "$ROOT/Resources/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
 
 echo "==> Ad-hoc signing"
-codesign --force --sign - --timestamp=none "$APP"
+# Hardened runtime: no injected libraries, no DYLD_* tricks.
+codesign --force --sign - --timestamp=none --options runtime "$APP"
 codesign --verify --verbose=1 "$APP"
 
 echo "==> Zipping"

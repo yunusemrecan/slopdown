@@ -312,7 +312,7 @@ public enum MarkdownParser {
         }
 
         let inlineRange = NSRange(location: inlineStart, length: lineEnd - inlineStart)
-        if inlineRange.length > 0 {
+        if inlineRange.length > 0, line.length <= LinkSafety.maxStyledLineLength {
             parseInline(str, ns, inlineRange, line: line, into: &out)
         }
     }

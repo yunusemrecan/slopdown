@@ -207,6 +207,7 @@ final class MarkdownStyler {
 
         case .link(let link) where link.style == .embed && allowEmbeds && !link.target.isEmpty:
             guard isAloneOnLine(e, storage), let url = resolvedURL(link), LinkResolver.isMarkdownFile(url),
+                  LinkSafety.isRenderable(url),
                   let embed = EmbedStore.shared.embed(url, heading: link.heading,
                                                       width: max(100, textWidth - RenderedEmbed.inset.width * 2)) else {
                 styleLink(e, link, revealed: revealed, storage, clip: clip)
@@ -446,8 +447,12 @@ final class MarkdownStyler {
         resolutions.lookup("L\(link.style)|\(link.target)|\(context.document?.path ?? "")") { context.resolve(link) }
     }
 
+    /// Images and embeds are drawn into the note without a click, so files in hidden,
+    /// Library, system or other users' folders are never rendered (LinkSafety).
     func resolvedURL(_ img: MDImage) -> URL? {
-        resolutions.lookup("I\(img.isWiki)|\(img.source)|\(context.document?.path ?? "")") { context.resolveImage(img) }
+        resolutions.lookup("I\(img.isWiki)|\(img.source)|\(context.document?.path ?? "")") {
+            context.resolveImage(img).flatMap { LinkSafety.isRenderable($0) ? $0 : nil }
+        }
     }
 }
 #endif
