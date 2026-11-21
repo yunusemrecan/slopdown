@@ -8,6 +8,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     private(set) var textView: EditorTextView!
     private let storage = NSTextStorage()
     private(set) var statusBar: StatusBarView!
+    private(set) var previewPane: PreviewPane!
+    private var splitView: NSSplitView!
     private var stats = TextStats("")
     private let layoutManager = NSLayoutManager()
     private let concealer = GlyphConcealer()
@@ -48,8 +50,14 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         content.addSubview(status)
         statusBar = status
 
-        let scroll = NSScrollView(frame: NSRect(x: 0, y: barHeight, width: content.bounds.width,
-                                                height: content.bounds.height - barHeight))
+        let split = NSSplitView(frame: NSRect(x: 0, y: barHeight, width: content.bounds.width,
+                                              height: content.bounds.height - barHeight))
+        split.isVertical = true
+        split.dividerStyle = .thin
+        split.autoresizingMask = [.width, .height]
+        splitView = split
+
+        let scroll = NSScrollView(frame: split.bounds)
         scroll.autoresizingMask = [.width, .height]
         scroll.hasVerticalScroller = true
         scroll.borderType = .noBorder
@@ -81,7 +89,15 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         storage.delegate = self
 
         scroll.documentView = tv
-        content.addSubview(scroll)
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(editorScrolled(_:)),
+                                               name: NSView.boundsDidChangeNotification, object: scroll.contentView)
+        let pane = PreviewPane(frame: NSRect(x: 0, y: 0, width: 400, height: split.bounds.height))
+        pane.isHidden = true
+        previewPane = pane
+        split.addArrangedSubview(scroll)
+        split.addArrangedSubview(pane)
+        content.addSubview(split)
         window.contentView = content
         textView = tv
         tv.updateTextWidth()
@@ -125,6 +141,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         siteChecked = nil
         styler.resolutions.invalidate()
         restyleAll()
+        reloadPreview()
     }
 
     // MARK: - Hugo site
@@ -210,7 +227,72 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         if editedMask.contains(.editedCharacters) { parseIsStale = true }
     }
 
+    // MARK: - Preview pane
+
+    var isPreviewVisible: Bool { previewPane.map { !$0.isHidden } ?? false }
+
+    @objc func togglePreviewPane(_ sender: Any?) {
+        guard let window, let previewPane, let splitView else { return }
+        if isPreviewVisible {
+            previewPane.isHidden = true
+            splitView.adjustSubviews()
+            return
+        }
+        // Make room: widen the window if the editor would get too narrow.
+        var frame = window.frame
+        if frame.width < 1100, let screen = window.screen?.visibleFrame {
+            let extra = min(1100 - frame.width, screen.maxX - frame.maxX + frame.minX - screen.minX)
+            frame.size.width += max(0, extra)
+            frame.origin.x = max(screen.minX, min(frame.minX, screen.maxX - frame.width))
+            window.setFrame(frame, display: true, animate: false)
+        }
+        previewPane.isHidden = false
+        splitView.adjustSubviews()
+        splitView.setPosition(splitView.bounds.width * 0.5, ofDividerAt: 0)
+        reloadPreview()
+    }
+
+    /// Points the pane at this note's page on `hugo server`.
+    func reloadPreview() {
+        guard isPreviewVisible, let previewPane else { return }
+        guard let site, let page = markdownDocument?.fileURL else {
+            previewPane.showMessage(markdownDocument?.fileURL == nil
+                ? "Save this note to preview it."
+                : "The preview pane shows a page the way its Hugo site renders it.\nThis note isn’t in a Hugo site’s content folder.")
+            return
+        }
+        previewPane.showMessage("Starting hugo server…")
+        markdownDocument?.autosave(withImplicitCancellability: false) { _ in }
+        HugoPreview.shared.url(of: page, in: site) { [weak self] url, output in
+            guard let self, self.isPreviewVisible else { return }
+            if let url {
+                self.previewPane.show(url)
+            } else {
+                let m = HugoPreview.failureMessage(output)
+                self.previewPane.showMessage(m.title + "\n\n" + m.detail)
+            }
+        }
+    }
+
+    /// Save soon after typing so hugo server rebuilds and the pane live-reloads.
+    private func schedulePreviewSave() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(savePreview), object: nil)
+        perform(#selector(savePreview), with: nil, afterDelay: 0.6)
+    }
+
+    @objc private func savePreview() {
+        guard isPreviewVisible, let doc = markdownDocument, doc.fileURL != nil, doc.isDocumentEdited else { return }
+        doc.autosave(withImplicitCancellability: false) { _ in }
+    }
+
+    @objc private func editorScrolled(_ note: Notification) {
+        guard isPreviewVisible, let tv = textView, let clip = tv.enclosingScrollView?.contentView else { return }
+        let range = tv.frame.height - clip.bounds.height
+        previewPane.scroll(toFraction: range > 0 ? clip.bounds.minY / range : 0)
+    }
+
     func textDidChange(_ notification: Notification) {
+        if isPreviewVisible { schedulePreviewSave() }
         restyleAll()
     }
 

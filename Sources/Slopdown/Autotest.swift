@@ -180,10 +180,81 @@ enum Autotest {
                 DispatchQueue.main.async {
                     check("hugo-server", status == 200 && body.contains("First Post") && body.contains("/posts/second/"),
                           "status \(status) \(error.map { "\($0)" } ?? "")")
-                    HugoPreview.shared.stopAll()
-                    done()
+                    previewPaneTest(editor) {
+                        HugoPreview.shared.stopAll()
+                        done()
+                    }
                 }
             }.resume()
+        }
+    }
+
+    /// Preview pane: loads the page from hugo server and live-reloads after an edit.
+    private static func previewPaneTest(_ editor: EditorWindowController, done: @escaping () -> Void) {
+        guard let tv = editor.textView, let pane = editor.previewPane else { done(); return }
+        var finished = false
+        func finish() {
+            guard !finished else { return }
+            finished = true
+            pane.onLoad = nil
+            done()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
+            if !finished { check("pane-timeout", false); finish() }
+        }
+        let original = tv.string
+        var loads = 0
+        pane.onLoad = {
+            loads += 1
+            if loads == 1 {
+                let path = pane.webView.url?.path ?? ""
+                check("pane-load", path == "/posts/first/", path)
+                pane.webView.evaluateJavaScript("document.title") { title, _ in
+                    check("pane-title", (title as? String)?.contains("First Post") == true, String(describing: title))
+                    // Edit → autosave → hugo rebuild → live reload
+                    let end = (tv.string as NSString).length
+                    editor.replace(NSRange(location: end, length: 0), with: "\n\nLive edit marker 4711\n", actionName: "")
+                }
+            } else {
+                pane.webView.evaluateJavaScript("document.body.innerText") { text, _ in
+                    let ok = (text as? String)?.contains("Live edit marker 4711") == true
+                    guard ok || loads > 4 else { return }   // wait for the reload that has the edit
+                    check("pane-livereload", ok, "after \(loads) loads")
+                    paneSnapshot(editor) {
+                        editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
+                        editor.markdownDocument?.autosave(withImplicitCancellability: false) { _ in
+                            DispatchQueue.main.async { finish() }
+                        }
+                    }
+                }
+            }
+        }
+        editor.togglePreviewPane(nil)
+        check("pane-visible", editor.isPreviewVisible)
+    }
+
+    /// Window with the web view composited in (WKWebView draws out of process).
+    private static func paneSnapshot(_ editor: EditorWindowController, done: @escaping () -> Void) {
+        guard let pane = editor.previewPane, let frameView = editor.window?.contentView?.superview else { done(); return }
+        pane.webView.takeSnapshot(with: nil) { image, _ in
+            frameView.display()
+            if let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) {
+                frameView.cacheDisplay(in: frameView.bounds, to: rep)
+                let out = NSImage(size: frameView.bounds.size)
+                out.addRepresentation(rep)
+                if let image {
+                    out.lockFocusFlipped(frameView.isFlipped)
+                    let r = pane.webView.convert(pane.webView.bounds, to: frameView)
+                    image.draw(in: r)
+                    out.unlockFocus()
+                }
+                if let tiff = out.tiffRepresentation, let bmp = NSBitmapImageRep(data: tiff),
+                   let png = bmp.representation(using: .png, properties: [:]) {
+                    try? png.write(to: outDir.appendingPathComponent("Hugo-pane.png"))
+                    log("autotest: wrote Hugo-pane.png")
+                }
+            }
+            done()
         }
     }
 

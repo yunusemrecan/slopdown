@@ -81,19 +81,70 @@ final class HugoPreview {
         }
     }
 
-    /// Browser URL of a page on the running server.
-    static func pageURL(_ page: URL, site: HugoSite, base: URL) -> URL? {
+    // MARK: - Page paths (`hugo list all`)
+
+    private var pagePaths: [String: (paths: [String: String], time: Date)] = [:]
+
+    /// Path of a page below the site's base URL, as Hugo publishes it (slug, url and
+    /// permalinks settings included), from `hugo list all`; falls back to a guess.
+    func pagePath(_ page: URL, site: HugoSite, completion: @escaping (String) -> Void) {
+        let key = site.root.path
+        let file = page.standardizedFileURL.path
+        if let cached = pagePaths[key], let p = cached.paths[file], Date().timeIntervalSince(cached.time) < 30 {
+            completion(p)
+            return
+        }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        p.arguments = ["-lc", "exec hugo list all"]
+        p.currentDirectoryURL = site.root
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { completion(Self.guessedPath(page, site: site)); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Read before waiting: a large listing would otherwise fill the pipe and block.
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            let paths = site.pagePaths(fromListOutput: String(decoding: data, as: UTF8.self))
+            DispatchQueue.main.async {
+                if !paths.isEmpty { self.pagePaths[key] = (paths, Date()) }
+                completion(paths[file] ?? Self.guessedPath(page, site: site))
+            }
+        }
+    }
+
+    static func guessedPath(_ page: URL, site: HugoSite) -> String {
         var path = site.logicalPath(of: page).lowercased().replacingOccurrences(of: " ", with: "-")
         path = String(path.drop(while: { $0 == "/" }))
         if !path.isEmpty { path += "/" }
+        return path
+    }
+
+    /// Browser URL of a page on the running server (guessed path; see `pagePath`).
+    static func pageURL(_ page: URL, site: HugoSite, base: URL) -> URL? {
+        pageURL(path: guessedPath(page, site: site), base: base)
+    }
+
+    static func pageURL(path: String, base: URL) -> URL? {
         let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         let b = base.absoluteString.hasSuffix("/") ? base : base.appendingPathComponent("")
         return URL(string: encoded, relativeTo: b)?.absoluteURL
     }
 
-    func preview(_ page: URL, in site: HugoSite, window: NSWindow?) {
+    /// Server URL of `page`: starts the server if needed, then asks Hugo for the path.
+    func url(of page: URL, in site: HugoSite, completion: @escaping (URL?, String) -> Void) {
         baseURL(for: site) { base, output in
-            guard let base, let url = Self.pageURL(page, site: site, base: base) else {
+            guard let base else { completion(nil, output); return }
+            self.pagePath(page, site: site) { path in
+                completion(Self.pageURL(path: path, base: base), output)
+            }
+        }
+    }
+
+    func preview(_ page: URL, in site: HugoSite, window: NSWindow?) {
+        url(of: page, in: site) { url, output in
+            guard let url else {
                 Self.showFailure(output, window: window)
                 return
             }
@@ -101,15 +152,18 @@ final class HugoPreview {
         }
     }
 
+    static func failureMessage(_ output: String) -> (title: String, detail: String) {
+        if output.contains("command not found") || output.contains("not found: hugo") {
+            return ("Hugo isn’t installed", "Install it with Homebrew:\n\nbrew install hugo")
+        }
+        return ("hugo server didn’t start", String(output.suffix(1200)))
+    }
+
     static func showFailure(_ output: String, window: NSWindow?) {
         let alert = NSAlert()
-        if output.contains("command not found") || output.contains("not found: hugo") {
-            alert.messageText = "Hugo isn’t installed"
-            alert.informativeText = "Install it with Homebrew:\n\nbrew install hugo"
-        } else {
-            alert.messageText = "hugo server didn’t start"
-            alert.informativeText = String(output.suffix(1200))
-        }
+        let m = failureMessage(output)
+        alert.messageText = m.title
+        alert.informativeText = m.detail
         if let window { alert.beginSheetModal(for: window) } else { alert.runModal() }
     }
 

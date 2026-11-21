@@ -60,6 +60,8 @@ public struct HugoSite: Equatable {
     public var assetsDir: URL
     /// The link render hook is on (config or a custom render-link template).
     public var hasLinkRenderHook: Bool
+    /// `baseURL` from the config (used to turn permalinks into server paths).
+    public var baseURL: String? = nil
     /// What the project itself does (from its content files).
     public var detected: HugoConventions
 
@@ -123,6 +125,7 @@ public struct HugoSite: Equatable {
                             staticDirs: [staticDir.standardizedFileURL], assetsDir: assets.standardizedFileURL,
                             hasLinkRenderHook: hookInConfig || hookTemplate,
                             detected: HugoConventions(style: .relref))
+        site.baseURL = setting("baseURL")
         site.detected = site.detectConventions(fileManager: fm)
         return site
     }
@@ -282,6 +285,66 @@ public struct HugoSite: Equatable {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "()")
         return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
+    }
+
+    // MARK: - Page URLs from `hugo list all`
+
+    /// Minimal RFC 4180 CSV parser (quoted fields, doubled quotes, newlines in quotes).
+    public static func parseCSV(_ text: String) -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var quoted = false
+        var chars = Array(text)
+        chars.append("\n")
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            if quoted {
+                if c == "\"" {
+                    if i + 1 < chars.count, chars[i + 1] == "\"" { field.append("\""); i += 1 } else { quoted = false }
+                } else {
+                    field.append(c)
+                }
+            } else if c == "\"" {
+                quoted = true
+            } else if c == "," {
+                row.append(field); field = ""
+            } else if c == "\n" || c == "\r\n" {
+                row.append(field); field = ""
+                if !(row.count == 1 && row[0].isEmpty) { rows.append(row) }
+                row = []
+            } else if c != "\r" {
+                field.append(c)
+            }
+            i += 1
+        }
+        return rows
+    }
+
+    /// Output of `hugo list all` → [absolute file path: path below the site's base URL],
+    /// e.g. "/…/content/posts/first.md" → "posts/first/".
+    public func pagePaths(fromListOutput text: String) -> [String: String] {
+        let rows = Self.parseCSV(text)
+        guard let header = rows.first,
+              let pathCol = header.firstIndex(of: "path"),
+              let linkCol = header.firstIndex(of: "permalink") else { return [:] }
+        let basePath = baseURL.flatMap { URL(string: $0)?.path } ?? "/"
+        var result: [String: String] = [:]
+        for row in rows.dropFirst() where row.count > max(pathCol, linkCol) {
+            let file = root.appendingPathComponent(row[pathCol]).standardizedFileURL.path
+            let link = row[linkCol]
+            var path: String
+            if let base = baseURL, link.hasPrefix(base) {
+                path = String(link.dropFirst(base.count))
+            } else {
+                path = URL(string: link)?.path ?? link
+                if path.hasPrefix(basePath) { path = String(path.dropFirst(basePath.count)) }
+                if link.hasSuffix("/") && !path.hasSuffix("/") { path += "/" }
+            }
+            result[file] = String(path.drop(while: { $0 == "/" }))
+        }
+        return result
     }
 
     // MARK: - New pages

@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static let appName = "Slopdown"
 
     private var sourceModeItem: NSMenuItem?
+    private var previewPaneItem: NSMenuItem?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = buildMainMenu()
@@ -122,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         view.delegate = self
         sourceModeItem = view.addItem(withTitle: "Source Mode",
                                       action: #selector(EditorWindowController.toggleSourceMode(_:)), keyEquivalent: "e")
+        previewPaneItem = view.addItem(withTitle: "Preview Pane",
+                                       action: #selector(EditorWindowController.togglePreviewPane(_:)), keyEquivalent: "P")
         view.addItem(.separator())
         view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]
@@ -168,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         let editor = NSApp.keyWindow?.windowController as? EditorWindowController
         sourceModeItem?.state = (editor?.styler.sourceMode ?? false) ? .on : .off
+        previewPaneItem?.state = (editor?.isPreviewVisible ?? false) ? .on : .off
     }
 }
 #endif

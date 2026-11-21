@@ -171,3 +171,28 @@ final class LinkContextTests: XCTestCase {
         XCTAssertEqual(plain.emptyLink(text: "").0, "[]()")
     }
 }
+
+final class HugoListTests: XCTestCase {
+    func testCSV() {
+        let rows = HugoSite.parseCSV("a,b,c\n\"x, y\",\"he said \"\"hi\"\"\",\n")
+        XCTAssertEqual(rows, [["a", "b", "c"], ["x, y", "he said \"hi\"", ""]])
+    }
+
+    func testPagePaths() {
+        let root = URL(fileURLWithPath: "/site")
+        var site = HugoSite(root: root, contentDir: root.appendingPathComponent("content"), staticDirs: [],
+                            assetsDir: root.appendingPathComponent("assets"), hasLinkRenderHook: false,
+                            detected: HugoConventions(style: .relref))
+        site.baseURL = "https://example.org/blog/"
+        let out = """
+        path,slug,title,date,expiryDate,publishDate,draft,permalink,kind,section
+        content/posts/first.md,,"First, Post",2026-11-21T10:00:00+03:00,,,false,https://example.org/blog/posts/first/,page,posts
+        content/posts/second/index.md,my-slug,Second,2026-11-20T10:00:00+03:00,,,false,https://example.org/blog/posts/my-slug/,page,posts
+        content/_index.md,,Home,,,,false,https://example.org/blog/,home,
+        """
+        let paths = site.pagePaths(fromListOutput: out)
+        XCTAssertEqual(paths["/site/content/posts/first.md"], "posts/first/")
+        XCTAssertEqual(paths["/site/content/posts/second/index.md"], "posts/my-slug/")
+        XCTAssertEqual(paths["/site/content/_index.md"], "")
+    }
+}

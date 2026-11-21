@@ -152,6 +152,7 @@ extension NSToolbarItem.Identifier {
     static let sdQuote = Self("sd.quote")
     static let sdSource = Self("sd.source")
     static let sdPreview = Self("sd.preview")
+    static let sdPane = Self("sd.pane")
 }
 
 extension EditorWindowController: NSToolbarDelegate {
@@ -168,7 +169,7 @@ extension EditorWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.sdHeading, .sdBold, .sdItalic, .sdStrike, .sdCode, .space,
          .sdLink, .sdWiki, .sdEmbed, .space,
-         .sdBullet, .sdNumbered, .sdTask, .sdQuote, .flexibleSpace, .sdPreview, .sdSource]
+         .sdBullet, .sdNumbered, .sdTask, .sdQuote, .flexibleSpace, .sdPane, .sdPreview, .sdSource]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -208,6 +209,7 @@ extension EditorWindowController: NSToolbarDelegate {
         case .sdNumbered: return button("Numbers", "list.number", #selector(formatNumberedList(_:)), "Numbered list")
         case .sdTask: return button("Tasks", "checklist", #selector(formatTaskList(_:)), "Task list")
         case .sdQuote: return button("Quote", "text.quote", #selector(formatQuote(_:)), "Quote")
+        case .sdPane: return button("Preview Pane", "sidebar.right", #selector(togglePreviewPane(_:)), "Preview pane: the page as the Hugo site renders it (⇧⌘P)")
         case .sdPreview: return button("Preview", "globe", #selector(previewInBrowser(_:)), "Preview in browser with hugo server (⌥⌘P)")
         case .sdSource: return button("Source", "doc.plaintext", #selector(toggleSourceMode(_:)), "Source mode (⌘E)")
         default: return nil
