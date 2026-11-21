@@ -59,6 +59,19 @@ the caret.
   numbered / task lists and quotes. Each command toggles: using it again removes it.
 - **Status bar**: file path (click to show in Finder), line and column, word / character /
   line counts, and counts for the selection.
+- **Hugo sites**: a note inside a Hugo site's `content/` folder switches to Hugo mode
+  (status bar: *Hugo · … links*).
+  - Slopdown reads the site's own content and writes links the way the project already
+    does: `relref` / `ref` shortcodes (`{{< >}}` or `{{% %}}`), page paths for Hugo's
+    link render hook (`/posts/foo`), or relative `.md` files. The status bar menu can
+    override this per site.
+  - ⌘K, ⇧⌘K (link to page), and the create / choose dialogs for missing links all write
+    that convention; new pages get TOML or YAML front matter like the site's archetype.
+  - All of these link styles, `static/` and page-bundle images, `{{< figure >}}`, TOML
+    front matter and shortcodes render correctly; `[[wiki links]]` are flagged because
+    Hugo can't build them.
+  - **Preview in Browser** (⌥⌘P, globe button) starts `hugo server` for the site and
+    opens the page; **New Hugo Page…** creates a page with front matter.
 - **Source mode** (View → Source Mode, ⌘E): plain monospaced markdown.
 - macOS autosave, versions, rename / move, and reloading files changed on disk.
 
