@@ -128,8 +128,10 @@ therefore never does anything risky on a single click:
 - **Hugo**: building a site can run code that comes with it (PostCSS/Babel settings, Hugo
   modules, tools the site allows), so the first preview of each site asks first. `hugo server`
   only listens on `127.0.0.1`, and the preview pane cannot be sent to any other site.
-- The app is signed with the hardened runtime. The self-test mode used by CI is not
-  compiled into released builds. Very long lines are not styled, so a huge file can't
+- The app has only an ad-hoc signature: it is not signed with an Apple Developer ID and
+  not notarized, so nothing vouches for who built it. The signature does enable the
+  hardened runtime, which stops other code from being injected into the app while it
+  runs. The self-test mode used by CI is not compiled into released builds (CI checks both). Very long lines are not styled, so a huge file can't
   freeze typing.
 
 ## Keyboard shortcuts
