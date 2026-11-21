@@ -122,13 +122,57 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     func documentLocationChanged() {
-        statusBar?.setFile(markdownDocument?.fileURL)
+        siteChecked = nil
         styler.resolutions.invalidate()
         restyleAll()
     }
 
-    private func restyleAll() {
-        styler.baseDirectory = markdownDocument?.fileURL?.deletingLastPathComponent()
+    // MARK: - Hugo site
+
+    private var siteChecked: URL?        // document URL the site was looked up for
+    private(set) var site: HugoSite?
+
+    /// The site the note belongs to (looked up once per file location).
+    private func refreshSite() {
+        let url = markdownDocument?.fileURL
+        guard url != siteChecked else { return }
+        siteChecked = url
+        site = url.flatMap { HugoSite.containing($0) }
+        statusBar?.setSite(site, conventions: conventions)
+    }
+
+    /// The project's link conventions, with the user's per-site choice applied.
+    var conventions: HugoConventions? {
+        guard let site else { return nil }
+        var c = site.detected
+        if let raw = UserDefaults.standard.string(forKey: Self.styleKey(site)), let style = HugoLinkStyle(rawValue: raw) {
+            c.style = style
+        }
+        return c
+    }
+
+    static func styleKey(_ site: HugoSite) -> String { "HugoLinkStyle:" + site.root.path }
+
+    func setLinkStyle(_ style: HugoLinkStyle?) {
+        guard let site else { return }
+        if let style { UserDefaults.standard.set(style.rawValue, forKey: Self.styleKey(site)) }
+        else { UserDefaults.standard.removeObject(forKey: Self.styleKey(site)) }
+        // Other open notes of the same site follow.
+        for doc in NSDocumentController.shared.documents {
+            if let editor = (doc as? MarkdownDocument)?.editor, editor.site?.root == site.root {
+                editor.statusBar?.setSite(editor.site, conventions: editor.conventions)
+                editor.restyleAll()
+            }
+        }
+    }
+
+    var linkContext: LinkContext {
+        LinkContext(document: markdownDocument?.fileURL, site: site, conventions: conventions)
+    }
+
+    func restyleAll() {
+        refreshSite()
+        styler.context = linkContext
         styler.textWidth = textWidth
         styler.reparse(storage.string)
         parseIsStale = false
@@ -239,7 +283,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         replace(r, with: checked ? " " : "x", actionName: checked ? "Uncheck Task" : "Check Task")
     }
 
-    private func replace(_ r: NSRange, with s: String, actionName: String) {
+    func replace(_ r: NSRange, with s: String, actionName: String) {
         guard NSMaxRange(r) <= storage.length else { return }
         if textView.shouldChangeText(in: r, replacementString: s) {
             storage.replaceCharacters(in: r, with: s)
@@ -252,10 +296,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
 
     func follow(_ e: MDElement) {
         guard let link = e.link else { return }
-        let target = MarkdownStyler.fileTarget(of: link)
-        let heading = MarkdownStyler.heading(of: link)
+        let context = linkContext
+        let target = LinkContext.fileTarget(of: link)
+        let heading = LinkContext.heading(of: link)
 
-        if link.style == .bareURL || LinkResolver.isExternal(target) {
+        if context.isExternal(link) {
             if let url = URL(string: target) { NSWorkspace.shared.open(url) }
             return
         }
@@ -263,17 +308,17 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
             if let heading { reveal(heading: heading) }
             return
         }
-        guard let base = markdownDocument?.fileURL?.deletingLastPathComponent() else {
+        guard let base = context.baseDirectory else {
             let alert = NSAlert()
             alert.messageText = "Save this note first"
             alert.informativeText = "Links are looked up relative to the folder the note is saved in."
             alert.beginSheetModal(for: window!)
             return
         }
-        if let url = LinkResolver.resolve(target: target, relativeTo: base) {
+        if let url = context.resolve(link) {
             Self.open(url, heading: heading)
         } else {
-            askAboutMissing(target: target, link: link, base: base, heading: heading)
+            askAboutMissing(target: target, link: link, base: site?.contentDir ?? base, heading: heading)
         }
     }
 
@@ -297,15 +342,17 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         guard let window else { return }
         let alert = NSAlert()
         alert.messageText = "“\(target)” doesn’t exist"
-        alert.informativeText = "No matching file in “\(base.lastPathComponent)” or its subfolders."
-        alert.addButton(withTitle: "Create New File")
+        alert.informativeText = site == nil
+            ? "No matching file in “\(base.lastPathComponent)” or its subfolders."
+            : "No page with this path in the site’s “\(base.lastPathComponent)” folder."
+        alert.addButton(withTitle: site == nil ? "Create New File" : "Create New Page")
         alert.addButton(withTitle: "Choose File…")
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
             switch response {
             case .alertFirstButtonReturn:
-                self.createFile(for: target, base: base)
+                self.createFile(for: link)
             case .alertSecondButtonReturn:
                 DispatchQueue.main.async { self.chooseFile(for: link, base: base, heading: heading) }
             default:
@@ -314,13 +361,18 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         }
     }
 
-    private func createFile(for target: String, base: URL) {
-        let url = LinkResolver.newFileURL(for: target, relativeTo: base)
+    private func createFile(for link: MDLink) {
+        let context = linkContext
+        guard let url = context.newFileURL(for: link) else { return }
+        createAndOpen(url, contents: context.newFileContents(for: url))
+    }
+
+    func createAndOpen(_ url: URL, contents: String) {
         let fm = FileManager.default
         do {
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             if !fm.fileExists(atPath: url.path) {
-                try Data().write(to: url, options: .withoutOverwriting)
+                try Data(contents.utf8).write(to: url, options: .withoutOverwriting)
             }
             styler.resolutions.invalidate()
             restyleAll()   // the link is no longer "unresolved"
@@ -341,15 +393,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         panel.prompt = "Link"
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
-            self.retarget(link, to: url, base: base)
+            if let newTarget = self.linkContext.retarget(link, to: url) {
+                self.replace(link.targetRange, with: newTarget, actionName: "Change Link")
+            }
             Self.open(url, heading: heading)
         }
-    }
-
-    /// Rewrites the link so it points at the chosen file (undoable).
-    private func retarget(_ link: MDLink, to url: URL, base: URL) {
-        let newTarget = LinkResolver.linkTarget(for: url, relativeTo: base, wikiStyle: link.isWikiStyle)
-        replace(link.targetRange, with: newTarget, actionName: "Change Link")
     }
 
     // MARK: - Headings

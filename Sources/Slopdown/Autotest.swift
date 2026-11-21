@@ -42,8 +42,11 @@ enum Autotest {
             editor.window?.setFrame(NSRect(x: 40, y: 40, width: 900, height: 1000), display: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 capture(editor, name: url.deletingPathExtension().lastPathComponent)
-                doc?.close()
-                step(files, i + 1)
+                let next = {
+                    doc?.close()
+                    step(files, i + 1)
+                }
+                if url.path.contains("hugo-site") { hugoTest(editor, done: next) } else { next() }
             }
         }
     }
@@ -113,6 +116,77 @@ enum Autotest {
         if base == "Welcome" { formattingTest(editor) }
     }
 
+    static func check(_ name: String, _ ok: Bool, _ detail: String = "") {
+        log("format-test \(name): \(ok ? "PASS" : "FAIL") \(detail)")
+    }
+
+    /// Hugo site: detection, link resolution, link writing and `hugo server` preview.
+    private static func hugoTest(_ editor: EditorWindowController, done: @escaping () -> Void) {
+        guard let tv = editor.textView else { done(); return }
+        check("hugo-site", editor.site != nil, editor.site?.root.path ?? "nil")
+        guard let site = editor.site else { done(); return }
+        check("hugo-style", editor.conventions?.style == .relref, String(describing: editor.conventions))
+
+        let ctx = editor.linkContext
+        var resolved: [String: Bool] = [:]
+        for e in editor.styler.elements {
+            guard let l = e.link else { continue }
+            let u = ctx.resolve(l)
+            resolved[l.target] = u != nil
+            log("hugo link \(l.style) \(l.target) → \(u?.path ?? "nil")")
+        }
+        check("hugo-resolve", resolved["/posts/second"] == true && resolved["/about"] == true
+              && resolved["/posts/future"] == false, String(describing: resolved))
+
+        var hasImage = false
+        tv.textStorage?.enumerateAttribute(.sdImage, in: NSRange(location: 0, length: tv.string.utf16.count)) { v, _, _ in
+            if v != nil { hasImage = true }
+        }
+        check("hugo-figure", hasImage)
+        let siteTitle = editor.statusBar?.siteButton.itemTitle(at: 0) ?? ""
+        check("hugo-statusbar", editor.statusBar?.siteButton.isHidden == false && siteTitle.contains("relref"), siteTitle)
+        snapshot(editor, "Hugo-first")
+
+        let original = tv.string
+        let end = (original as NSString).length
+        // ⌘K writes the project's convention
+        tv.setSelectedRange(NSRange(location: end, length: 0))
+        editor.formatLink(nil)
+        let added1 = (tv.string as NSString).substring(from: end)
+        check("hugo-cmdK", added1 == "[]({{< relref \"\" >}})", added1.debugDescription)
+        editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
+
+        // Link to page
+        tv.setSelectedRange(NSRange(location: end, length: 0))
+        editor.insertPageLink(to: site.contentDir.appendingPathComponent("posts/second/index.md"))
+        let added2 = (tv.string as NSString).substring(from: end)
+        check("hugo-pagelink", added2 == "[Second Post]({{< relref \"/posts/second\" >}})", added2.debugDescription)
+        editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
+        check("hugo-restored", tv.string == original)
+
+        // Preview with hugo server
+        guard let page = editor.markdownDocument?.fileURL else { done(); return }
+        HugoPreview.shared.baseURL(for: site) { base, output in
+            guard let base, let url = HugoPreview.pageURL(page, site: site, base: base) else {
+                if output.contains("not found") { log("format-test hugo-server: SKIP (hugo not installed)") }
+                else { check("hugo-server", false, String(output.suffix(800)).debugDescription) }
+                done()
+                return
+            }
+            log("hugo server at \(base) → \(url)")
+            URLSession.shared.dataTask(with: url) { data, response, error in
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                let body = data.map { String(decoding: $0, as: UTF8.self) } ?? ""
+                DispatchQueue.main.async {
+                    check("hugo-server", status == 200 && body.contains("First Post") && body.contains("/posts/second/"),
+                          "status \(status) \(error.map { "\($0)" } ?? "")")
+                    HugoPreview.shared.stopAll()
+                    done()
+                }
+            }.resume()
+        }
+    }
+
     /// Formatting commands round-trip (toggle twice = original) and the status bar.
     private static func formattingTest(_ editor: EditorWindowController) {
         guard let tv = editor.textView else { return }
@@ -120,9 +194,6 @@ enum Autotest {
             let ns = tv.string as NSString
             let r = ns.range(of: needle)
             return r.location == NSNotFound ? nil : ns.lineRange(for: r)
-        }
-        func check(_ name: String, _ ok: Bool, _ detail: String = "") {
-            log("format-test \(name): \(ok ? "PASS" : "FAIL") \(detail)")
         }
 
         let original = tv.string

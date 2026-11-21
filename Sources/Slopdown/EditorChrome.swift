@@ -5,6 +5,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import UniformTypeIdentifiers
 import SlopdownCore
 
 // MARK: - Status bar
@@ -13,6 +14,8 @@ final class StatusBarView: NSView {
     static let height: CGFloat = 24
 
     let pathButton = NSButton(title: "", target: nil, action: nil)
+    /// "Hugo · relref ▾": link convention and site actions; hidden outside a Hugo site.
+    let siteButton = NSPopUpButton(frame: .zero, pullsDown: true)
     let infoLabel = NSTextField(labelWithString: "")
     var fileURL: URL?
 
@@ -40,14 +43,24 @@ final class StatusBarView: NSView {
         infoLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         infoLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        for v in [pathButton, infoLabel] as [NSView] {
+        siteButton.isBordered = false
+        siteButton.font = font
+        siteButton.controlSize = .small
+        (siteButton.cell as? NSPopUpButtonCell)?.arrowPosition = .arrowAtBottom
+        siteButton.isHidden = true
+
+        let left = NSStackView(views: [siteButton, pathButton])
+        left.orientation = .horizontal
+        left.spacing = 6
+        left.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        for v in [left, infoLabel] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
         NSLayoutConstraint.activate([
-            pathButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            pathButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            infoLabel.leadingAnchor.constraint(greaterThanOrEqualTo: pathButton.trailingAnchor, constant: 16),
+            left.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            left.centerYAnchor.constraint(equalTo: centerYAnchor),
+            infoLabel.leadingAnchor.constraint(greaterThanOrEqualTo: left.trailingAnchor, constant: 16),
             infoLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             infoLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
@@ -66,6 +79,33 @@ final class StatusBarView: NSView {
             pathButton.toolTip = nil
             pathButton.isEnabled = false
         }
+    }
+
+    func setSite(_ site: HugoSite?, conventions: HugoConventions?) {
+        guard let site, let c = conventions else {
+            siteButton.isHidden = true
+            return
+        }
+        siteButton.isHidden = false
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Hugo · \(c.style.shortName) links", action: nil, keyEquivalent: "") // pull-down title
+        let header = menu.addItem(withTitle: "Write links as", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        for style in HugoLinkStyle.allCases {
+            let item = menu.addItem(withTitle: style.title, action: #selector(EditorWindowController.chooseLinkStyle(_:)), keyEquivalent: "")
+            item.representedObject = style.rawValue
+            item.state = c.style == style ? .on : .off
+            item.indentationLevel = 1
+        }
+        let auto = menu.addItem(withTitle: "Use what the site uses (\(site.detected.style.shortName))",
+                                action: #selector(EditorWindowController.chooseLinkStyle(_:)), keyEquivalent: "")
+        auto.indentationLevel = 1
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Preview in Browser", action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "New Page…", action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Site in Finder", action: #selector(EditorWindowController.revealSite(_:)), keyEquivalent: "")
+        siteButton.menu = menu
+        siteButton.toolTip = "Hugo site: \(site.root.path)"
     }
 
     @objc private func revealInFinder(_ sender: Any?) {
@@ -111,6 +151,7 @@ extension NSToolbarItem.Identifier {
     static let sdTask = Self("sd.task")
     static let sdQuote = Self("sd.quote")
     static let sdSource = Self("sd.source")
+    static let sdPreview = Self("sd.preview")
 }
 
 extension EditorWindowController: NSToolbarDelegate {
@@ -127,7 +168,7 @@ extension EditorWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.sdHeading, .sdBold, .sdItalic, .sdStrike, .sdCode, .space,
          .sdLink, .sdWiki, .sdEmbed, .space,
-         .sdBullet, .sdNumbered, .sdTask, .sdQuote, .flexibleSpace, .sdSource]
+         .sdBullet, .sdNumbered, .sdTask, .sdQuote, .flexibleSpace, .sdPreview, .sdSource]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -161,12 +202,13 @@ extension EditorWindowController: NSToolbarDelegate {
         case .sdStrike: return button("Strikethrough", "strikethrough", #selector(formatStrikethrough(_:)), "Strikethrough (⇧⌘X)")
         case .sdCode: return button("Code", "chevron.left.forwardslash.chevron.right", #selector(formatCode(_:)), "Inline code (⌥⌘C)")
         case .sdLink: return button("Link", "link", #selector(formatLink(_:)), "Link (⌘K)")
-        case .sdWiki: return button("Wiki Link", "note.text", #selector(formatWikiLink(_:)), "Wiki link [[…]] (⇧⌘K)")
-        case .sdEmbed: return button("Embed", "photo", #selector(formatEmbed(_:)), "Image or note embed ![[…]] (⇧⌘E)")
+        case .sdWiki: return button("Wiki Link", "note.text", #selector(formatWikiLink(_:)), "Link to a note — [[wiki link]], or a Hugo link inside a Hugo site (⇧⌘K)")
+        case .sdEmbed: return button("Embed", "photo", #selector(formatEmbed(_:)), "Insert image or embed (⇧⌘E)")
         case .sdBullet: return button("Bullets", "list.bullet", #selector(formatBulletList(_:)), "Bulleted list")
         case .sdNumbered: return button("Numbers", "list.number", #selector(formatNumberedList(_:)), "Numbered list")
         case .sdTask: return button("Tasks", "checklist", #selector(formatTaskList(_:)), "Task list")
         case .sdQuote: return button("Quote", "text.quote", #selector(formatQuote(_:)), "Quote")
+        case .sdPreview: return button("Preview", "globe", #selector(previewInBrowser(_:)), "Preview in browser with hugo server (⌥⌘P)")
         case .sdSource: return button("Source", "doc.plaintext", #selector(toggleSourceMode(_:)), "Source mode (⌘E)")
         default: return nil
         }
@@ -184,7 +226,7 @@ extension EditorWindowController: NSToolbarDelegate {
 
     // MARK: - Formatting commands
 
-    private func applyFormatting(_ name: String, _ make: (String, NSRange) -> TextEdit) {
+    func applyFormatting(_ name: String, _ make: (String, NSRange) -> TextEdit) {
         guard let tv = textView, let ts = tv.textStorage else { return }
         let edit = make(tv.string, tv.selectedRange())
         guard NSMaxRange(edit.range) <= ts.length else { return }
@@ -201,9 +243,109 @@ extension EditorWindowController: NSToolbarDelegate {
     @objc func formatItalic(_ sender: Any?) { applyFormatting("Italic") { Formatting.toggleInline($0, $1, marker: "*") } }
     @objc func formatStrikethrough(_ sender: Any?) { applyFormatting("Strikethrough") { Formatting.toggleInline($0, $1, marker: "~~") } }
     @objc func formatCode(_ sender: Any?) { applyFormatting("Code") { Formatting.toggleInline($0, $1, marker: "`") } }
-    @objc func formatLink(_ sender: Any?) { applyFormatting("Link", Formatting.link) }
-    @objc func formatWikiLink(_ sender: Any?) { applyFormatting("Wiki Link", Formatting.wikiLink) }
-    @objc func formatEmbed(_ sender: Any?) { applyFormatting("Embed", Formatting.embed) }
+    @objc func formatLink(_ sender: Any?) {
+        guard site != nil else { applyFormatting("Link", Formatting.link); return }
+        let context = linkContext
+        applyFormatting("Link") { text, sel in
+            let ns = text as NSString
+            let selected = ns.substring(with: sel)
+            if LinkResolver.isExternal(selected.trimmingCharacters(in: .whitespaces)) { return Formatting.link(text, sel) }
+            let (s, caret) = context.emptyLink(text: selected)
+            return TextEdit(range: sel, replacement: s, selection: NSRange(location: sel.location + caret, length: 0))
+        }
+    }
+
+    /// Wiki link outside Hugo; inside a Hugo site, pick the page and write a Hugo link.
+    @objc func formatWikiLink(_ sender: Any?) {
+        if site != nil { linkToPage(sender) } else { applyFormatting("Wiki Link", Formatting.wikiLink) }
+    }
+
+    @objc func formatEmbed(_ sender: Any?) {
+        if site != nil { insertImage(sender) } else { applyFormatting("Embed", Formatting.embed) }
+    }
+
+    /// Choose a note/page and insert a link to it in the right convention.
+    @objc func linkToPage(_ sender: Any?) {
+        guard let window, let doc = markdownDocument?.fileURL else { NSSound.beep(); return }
+        let panel = NSOpenPanel()
+        panel.directoryURL = site?.contentDir ?? doc.deletingLastPathComponent()
+        panel.allowedContentTypes = [.init(filenameExtension: "md")!, .plainText]
+        panel.message = site == nil ? "Choose a note to link to" : "Choose a page to link to"
+        panel.prompt = "Link"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            self.insertPageLink(to: url)
+        }
+    }
+
+    func insertPageLink(to url: URL) {
+        let context = linkContext
+        applyFormatting("Link") { text, sel in
+            let selected = (text as NSString).substring(with: sel).trimmingCharacters(in: .whitespacesAndNewlines)
+            var title = selected
+            if title.isEmpty {
+                let pageText = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                title = (self.site != nil ? HugoSite.title(ofPageText: pageText) : nil) ?? url.deletingPathExtension().lastPathComponent
+            }
+            let link = context.pageLink(text: title, to: url) ?? ""
+            let end = sel.location + (link as NSString).length
+            return TextEdit(range: sel, replacement: link, selection: NSRange(location: end, length: 0))
+        }
+    }
+
+    @objc func insertImage(_ sender: Any?) {
+        guard let window, let doc = markdownDocument?.fileURL else { NSSound.beep(); return }
+        let panel = NSOpenPanel()
+        panel.directoryURL = doc.deletingLastPathComponent()
+        panel.allowedContentTypes = [.image]
+        panel.message = "Choose an image"
+        panel.prompt = "Insert"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url,
+                  let link = self.linkContext.imageLink(to: url) else { return }
+            self.applyFormatting("Insert Image") { _, sel in
+                TextEdit(range: sel, replacement: link,
+                         selection: NSRange(location: sel.location + (link as NSString).length, length: 0))
+            }
+        }
+    }
+
+    // MARK: - Hugo site actions
+
+    @objc func chooseLinkStyle(_ sender: Any?) {
+        let raw = (sender as? NSMenuItem)?.representedObject as? String
+        setLinkStyle(raw.flatMap(HugoLinkStyle.init(rawValue:)))
+    }
+
+    @objc func previewInBrowser(_ sender: Any?) {
+        guard let site, let page = markdownDocument?.fileURL else {
+            let alert = NSAlert()
+            alert.messageText = "Not part of a Hugo site"
+            alert.informativeText = "Preview runs “hugo server” for the site this note belongs to. Open a note from a Hugo site’s content folder."
+            if let window { alert.beginSheetModal(for: window) }
+            return
+        }
+        markdownDocument?.autosave(withImplicitCancellability: false) { _ in }
+        HugoPreview.shared.preview(page, in: site, window: window)
+    }
+
+    @objc func newHugoPage(_ sender: Any?) {
+        guard let window, let site, let doc = markdownDocument?.fileURL else { NSSound.beep(); return }
+        let panel = NSSavePanel()
+        panel.directoryURL = doc.deletingLastPathComponent()
+        panel.nameFieldStringValue = "new-page.md"
+        panel.allowedContentTypes = [.init(filenameExtension: "md")!]
+        panel.message = "New page in “\(site.root.lastPathComponent)”"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            self.createAndOpen(url, contents: HugoSite.frontMatter(for: url, toml: self.conventions?.tomlFrontMatter ?? true))
+        }
+    }
+
+    @objc func revealSite(_ sender: Any?) {
+        guard let site else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([site.root])
+    }
     @objc func formatBulletList(_ sender: Any?) { applyFormatting("Bulleted List") { Formatting.setLineFormat($0, $1, .bullet) } }
     @objc func formatNumberedList(_ sender: Any?) { applyFormatting("Numbered List") { Formatting.setLineFormat($0, $1, .numbered) } }
     @objc func formatTaskList(_ sender: Any?) { applyFormatting("Task List") { Formatting.setLineFormat($0, $1, .task) } }

@@ -9,6 +9,7 @@ public struct MDLink: Equatable {
         case embed       // ![[Note]] (non-image embed, followed like a wiki link)
         case markdown    // [text](target)
         case bareURL     // https://example.com
+        case hugoRef     // [text]({{% relref "/posts/foo" %}})
     }
 
     public var style: Style
@@ -86,6 +87,8 @@ public struct MDElement: Equatable {
         case boldItalic
         case strikethrough
         case inlineCode
+        /// Hugo shortcode `{{< name … >}}` / `{{% name … %}}` (shown dimmed, never parsed).
+        case shortcode(name: String)
         case link(MDLink)
         case image(MDImage)
     }

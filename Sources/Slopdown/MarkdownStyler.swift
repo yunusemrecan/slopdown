@@ -15,7 +15,9 @@ final class MarkdownStyler {
     var sourceMode = false
     /// Render `![[Note]]` contents (off inside an embed, so embeds don't nest).
     var allowEmbeds = true
-    var baseDirectory: URL?
+    /// Where the note lives (plain folder or Hugo site): how links resolve.
+    var context = LinkContext()
+    var baseDirectory: URL? { context.baseDirectory }
     /// Usable text width (for image sizing).
     var textWidth: CGFloat = Theme.readableWidth
     let resolutions = ResolutionCache()
@@ -204,8 +206,7 @@ final class MarkdownStyler {
             break // styleTables()
 
         case .link(let link) where link.style == .embed && allowEmbeds && !link.target.isEmpty:
-            guard isAloneOnLine(e, storage), let base = baseDirectory,
-                  let url = resolutions.resolve(link.target, base: base), LinkResolver.isMarkdownFile(url),
+            guard isAloneOnLine(e, storage), let url = resolvedURL(link), LinkResolver.isMarkdownFile(url),
                   let embed = EmbedStore.shared.embed(url, heading: link.heading,
                                                       width: max(100, textWidth - RenderedEmbed.inset.width * 2)) else {
                 styleLink(e, link, revealed: revealed, storage, clip: clip)
@@ -224,13 +225,15 @@ final class MarkdownStyler {
         case .link(let link):
             styleLink(e, link, revealed: revealed, storage, clip: clip)
 
+        case .shortcode:
+            set(storage, [.foregroundColor: Theme.secondaryColor, .font: Theme.monoFont,
+                          .backgroundColor: Theme.inlineCodeBackground], e.range, clip: clip)
+
         case .image(let img) where img.standalone:
             styleBlockImage(e, img, revealed: revealed, storage, clip: clip)
 
         case .image(let img):
-            guard !revealed, !img.isRemote, let base = baseDirectory,
-                  let url = img.isWiki ? resolutions.resolve(img.source, base: base)
-                                       : resolveMarkdownImage(img.source, base: base),
+            guard !revealed, !img.isRemote, let url = resolvedURL(img),
                   let loaded = ImageStore.shared.image(at: url), e.range.length > 1 else {
                 set(storage, [.foregroundColor: revealed ? Theme.syntaxColor : Theme.secondaryColor], e.range, clip: clip)
                 return
@@ -247,6 +250,16 @@ final class MarkdownStyler {
 
     private func styleLink(_ e: MDElement, _ link: MDLink, revealed: Bool, _ storage: NSMutableAttributedString, clip: NSRange) {
         do {
+            if context.site != nil, link.isWikiStyle {
+                // Hugo does not understand [[wiki links]]: they would be published as text.
+                set(storage, [.foregroundColor: NSColor.systemOrange,
+                              .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
+                              .underlineColor: NSColor.systemOrange,
+                              .toolTip: "Hugo doesn’t understand [[wiki links]]. Use ⇧⌘K to insert a link Hugo can build."],
+                    e.content, clip: clip)
+                hideOrDim(e, revealed: revealed, storage, clip: clip)
+                return
+            }
             let color = isResolved(link) ? Theme.linkColor : Theme.unresolvedLinkColor
             set(storage, [.foregroundColor: color,
                           .underlineStyle: NSUnderlineStyle.single.rawValue,
@@ -257,9 +270,7 @@ final class MarkdownStyler {
 
     private func styleBlockImage(_ e: MDElement, _ img: MDImage, revealed: Bool, _ storage: NSMutableAttributedString, clip: NSRange) {
         do {
-            guard img.standalone, !img.isRemote, let base = baseDirectory,
-                  let url = img.isWiki ? resolutions.resolve(img.source, base: base)
-                                       : resolveMarkdownImage(img.source, base: base),
+            guard img.standalone, !img.isRemote, let url = resolvedURL(img),
                   let loaded = ImageStore.shared.image(at: url) else {
                 // Remote, inline, missing or undecodable: leave the syntax visible, dimmed.
                 set(storage, [.foregroundColor: Theme.secondaryColor], e.range, clip: clip)
@@ -287,6 +298,8 @@ final class MarkdownStyler {
             set(storage, [.font: NSFont.monospacedSystemFont(ofSize: 14, weight: .bold)], e.range, clip: clip)
             for h in e.hidden { set(storage, [.foregroundColor: Theme.syntaxColor], h, clip: clip) }
         case .codeFence, .codeLine, .frontmatter:
+            set(storage, [.foregroundColor: Theme.secondaryColor], e.range, clip: clip)
+        case .shortcode:
             set(storage, [.foregroundColor: Theme.secondaryColor], e.range, clip: clip)
         case .link:
             set(storage, [.foregroundColor: Theme.linkColor], e.content, clip: clip)
@@ -425,29 +438,16 @@ final class MarkdownStyler {
     // MARK: - Links
 
     func isResolved(_ link: MDLink) -> Bool {
-        if link.style == .bareURL || LinkResolver.isExternal(link.target) { return true }
-        let target = Self.fileTarget(of: link)
-        if target.isEmpty { return true } // same-note heading
-        guard let base = baseDirectory else { return false }
-        return resolutions.resolve(target, base: base) != nil
+        if context.isExternal(link) || LinkContext.fileTarget(of: link).isEmpty { return true }
+        return resolvedURL(link) != nil
     }
 
-    func resolveMarkdownImage(_ source: String, base: URL) -> URL? {
-        resolutions.resolve(source, base: base)
+    func resolvedURL(_ link: MDLink) -> URL? {
+        resolutions.lookup("L\(link.style)|\(link.target)|\(context.document?.path ?? "")") { context.resolve(link) }
     }
 
-    /// Path part of a link (markdown links may carry a "#fragment").
-    static func fileTarget(of link: MDLink) -> String {
-        guard link.style == .markdown, let hash = link.target.firstIndex(of: "#") else { return link.target }
-        return String(link.target[..<hash])
-    }
-
-    static func heading(of link: MDLink) -> String? {
-        if link.style == .markdown, let hash = link.target.firstIndex(of: "#") {
-            let h = String(link.target[link.target.index(after: hash)...])
-            return h.isEmpty ? nil : h
-        }
-        return link.heading
+    func resolvedURL(_ img: MDImage) -> URL? {
+        resolutions.lookup("I\(img.isWiki)|\(img.source)|\(context.document?.path ?? "")") { context.resolveImage(img) }
     }
 }
 #endif

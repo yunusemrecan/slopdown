@@ -92,7 +92,7 @@ final class EmbedStore {
 
         let sub = MarkdownStyler()
         sub.allowEmbeds = false
-        sub.baseDirectory = url.deletingLastPathComponent()
+        sub.context = LinkContext(document: url, site: HugoSite.containing(url))
         sub.textWidth = width
         sub.reparse(section)
         let storage = NSTextStorage(string: section)

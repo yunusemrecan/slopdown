@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if Autotest.isActive { Autotest.run() }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        HugoPreview.shared.stopAll()
+    }
+
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { !Autotest.isActive }
 
     // MARK: - Menu
@@ -50,6 +54,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let setName = NSSelectorFromString("_setMenuName:")
         if recent.responds(to: setName) { recent.perform(setName, with: "NSRecentDocumentsMenu") }
         file.addItem(withTitle: "Open Recent", action: nil, keyEquivalent: "").submenu = recent
+        file.addItem(withTitle: "New Hugo Page…", action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
+        let preview = file.addItem(withTitle: "Preview in Browser", action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "p")
+        preview.keyEquivalentModifierMask = [.command, .option]
         file.addItem(.separator())
         file.addItem(withTitle: "Close", action: Selector(("performClose:")), keyEquivalent: "w")
         file.addItem(withTitle: "Save…", action: Selector(("saveDocument:")), keyEquivalent: "s")
@@ -96,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fmt("Link", #selector(EditorWindowController.formatLink(_:)), "k")
         fmt("Wiki Link", #selector(EditorWindowController.formatWikiLink(_:)), "K")
         fmt("Embed", #selector(EditorWindowController.formatEmbed(_:)), "E")
+        fmt("Link to Note…", #selector(EditorWindowController.linkToPage(_:)), "k", [.command, .option])
+        fmt("Insert Image…", #selector(EditorWindowController.insertImage(_:)), "i", [.command, .option])
         format.addItem(.separator())
         fmt("Paragraph", #selector(EditorWindowController.formatHeading(_:)), "0", tag: 0)
         for level in 1...6 {

@@ -21,12 +21,14 @@ public enum MarkdownParser {
 
         var i = 0
 
-        // --- YAML frontmatter: first line "---", closed by "---" or "..."
-        if let first = lines.first, ns.substring(with: first).trimmingCharacters(in: .whitespaces) == "---" {
+        // --- Front matter: YAML "---" (closed by "---" or "...") or TOML "+++"
+        if let first = lines.first,
+           case let opener = ns.substring(with: first).trimmingCharacters(in: .whitespaces),
+           opener == "---" || opener == "+++" {
             var j = 1
             while j < lines.count {
                 let s = ns.substring(with: lines[j]).trimmingCharacters(in: .whitespaces)
-                if s == "---" || s == "..." { break }
+                if s == opener || (opener == "---" && s == "...") { break }
                 j += 1
             }
             if j < lines.count {
@@ -318,6 +320,8 @@ public enum MarkdownParser {
     // MARK: - Inline
 
     private static let codeRE = re(#"(`+)(?!`)(.+?)(?<!`)\1(?!`)"#)
+    private static let hugoRefLinkRE = re(#"\[([^\]\n]*)\]\(\s*(\{\{[<%]\s*(?:rel)?ref\s+"([^"\n]*)"\s*[>%]\}\})\s*\)"#)
+    private static let shortcodeRE = re(#"\{\{[<%]\s*/?\s*([A-Za-z0-9_./-]+)(.*?)[>%]\}\}"#)
     private static let embedRE = re(#"!\[\[([^\[\]\n]+?)\]\]"#)
     private static let wikiRE = re(#"\[\[([^\[\]\n]+?)\]\]"#)
     private static let mdImageRE = re(#"!\[([^\]\n]*)\]\(([^)\n]*)\)"#)
@@ -343,6 +347,45 @@ public enum MarkdownParser {
             let close = NSRange(location: NSMaxRange(m.range) - ticks, length: ticks)
             out.append(MDElement(kind: .inlineCode, range: m.range, revealRange: m.range,
                                  hidden: [open, close], content: m.range(at: 2), marker: empty(m.range)))
+            occupied.append(m.range)
+        }
+
+        // 1b. Hugo links whose destination is a ref/relref shortcode
+        for m in hugoRefLinkRE.matches(in: str, options: [], range: range) where free(m.range) {
+            let text = m.range(at: 1)
+            let arg = m.range(at: 3)
+            let raw = ns.substring(with: arg)
+            var target = raw
+            var heading: String? = nil
+            if let hash = raw.firstIndex(of: "#") {
+                heading = String(raw[raw.index(after: hash)...])
+                target = String(raw[..<hash])
+            }
+            let open = NSRange(location: m.range.location, length: 1)
+            let tail = NSRange(location: NSMaxRange(text), length: NSMaxRange(m.range) - NSMaxRange(text))
+            let link = MDLink(style: .hugoRef, target: target, heading: heading, targetRange: arg)
+            out.append(MDElement(kind: .link(link), range: m.range, revealRange: m.range,
+                                 hidden: [open, tail], content: text, marker: empty(m.range)))
+            occupied.append(open)
+            occupied.append(tail)
+        }
+
+        // 1c. Other Hugo shortcodes; {{< figure src="…" >}} on its own line is an image.
+        for m in shortcodeRE.matches(in: str, options: [], range: range) where free(m.range) {
+            let name = ns.substring(with: m.range(at: 1))
+            let args = m.range(at: 2)
+            if name == "figure", let src = attribute("src", in: ns, args) {
+                let width = attribute("width", in: ns, args).flatMap { Double(ns.substring(with: $0)) }
+                let path = ns.substring(with: src)
+                let img = MDImage(source: path.removingPercentEncoding ?? path, isWiki: false, width: width, height: nil,
+                                  isRemote: isRemote(path), standalone: isStandalone(ns, m.range, line: line),
+                                  targetRange: src)
+                out.append(MDElement(kind: .image(img), range: m.range, revealRange: m.range,
+                                     hidden: [m.range], content: m.range, marker: empty(m.range)))
+            } else {
+                out.append(MDElement(kind: .shortcode(name: name), range: m.range, revealRange: m.range,
+                                     hidden: [], content: m.range, marker: empty(m.range)))
+            }
             occupied.append(m.range)
         }
 
@@ -439,6 +482,13 @@ public enum MarkdownParser {
     }
 
     // MARK: - Helpers
+
+    /// Range of the value of `name="value"` (or 'value') inside a shortcode's arguments.
+    static func attribute(_ name: String, in ns: NSString, _ args: NSRange) -> NSRange? {
+        guard let re = try? NSRegularExpression(pattern: "(?:^|\\s)" + name + #"\s*=\s*(["'])(.*?)\1"#),
+              let m = re.firstMatch(in: ns.substring(from: 0), options: [], range: args) else { return nil }
+        return m.range(at: 2)
+    }
 
     struct WikiParts {
         var path: String

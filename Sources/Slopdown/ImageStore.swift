@@ -105,14 +105,13 @@ final class ResolutionCache {
     private var hits: [String: URL] = [:]
     private var misses: [String: Date] = [:]
 
-    func resolve(_ target: String, base: URL) -> URL? {
-        let key = base.path + "\u{0}" + target
+    func lookup(_ key: String, _ resolve: () -> URL?) -> URL? {
         if let u = hits[key] {
             if FileManager.default.fileExists(atPath: u.path) { return u }
             hits[key] = nil
         }
         if let t = misses[key], Date().timeIntervalSince(t) < 4 { return nil }
-        if let u = LinkResolver.resolve(target: target, relativeTo: base) {
+        if let u = resolve() {
             hits[key] = u
             misses[key] = nil
             return u
