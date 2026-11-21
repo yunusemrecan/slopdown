@@ -212,6 +212,7 @@ enum Autotest {
     private static func previewPaneTest(_ editor: EditorWindowController, done: @escaping () -> Void) {
         guard let tv = editor.textView, let pane = editor.previewPane else { done(); return }
         var finished = false
+        var loads = 0
         func finish() {
             guard !finished else { return }
             finished = true
@@ -226,7 +227,6 @@ enum Autotest {
             }
         }
         let original = tv.string
-        var loads = 0
         pane.onLoad = {
             loads += 1
             log("pane load \(loads): \(pane.webView.url?.absoluteString ?? "-")")
