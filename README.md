@@ -31,6 +31,11 @@ the caret.
   column stay raw.
 - **Embeds**: `![[Note]]` and `![[Note#Heading]]` on their own line show that note (or
   section) in a box; ⌘-click the box to open the note.
+- **Toolbar & Format menu**: heading level, bold (⌘B), italic (⌘I), strikethrough (⇧⌘X),
+  code (⌥⌘C), link (⌘K), wiki link (⇧⌘K), embed (⇧⌘E), headings (⌘0–⌘3), bulleted /
+  numbered / task lists and quotes. Each command toggles: using it again removes it.
+- **Status bar**: file path (click to show in Finder), line and column, word / character /
+  line counts, and counts for the selection.
 - **Source mode** (View → Source Mode, ⌘E): plain monospaced markdown.
 - macOS autosave, versions, rename / move, and reloading files changed on disk.
 

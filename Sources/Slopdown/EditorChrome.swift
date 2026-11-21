@@ -161,7 +161,7 @@ extension EditorWindowController: NSToolbarDelegate {
         case .sdStrike: return button("Strikethrough", "strikethrough", #selector(formatStrikethrough(_:)), "Strikethrough (⇧⌘X)")
         case .sdCode: return button("Code", "chevron.left.forwardslash.chevron.right", #selector(formatCode(_:)), "Inline code (⌥⌘C)")
         case .sdLink: return button("Link", "link", #selector(formatLink(_:)), "Link (⌘K)")
-        case .sdWiki: return button("Wiki Link", "link.circle", #selector(formatWikiLink(_:)), "Wiki link [[…]] (⇧⌘K)")
+        case .sdWiki: return button("Wiki Link", "note.text", #selector(formatWikiLink(_:)), "Wiki link [[…]] (⇧⌘K)")
         case .sdEmbed: return button("Embed", "photo", #selector(formatEmbed(_:)), "Image or note embed ![[…]] (⇧⌘E)")
         case .sdBullet: return button("Bullets", "list.bullet", #selector(formatBulletList(_:)), "Bulleted list")
         case .sdNumbered: return button("Numbers", "list.number", #selector(formatNumberedList(_:)), "Numbered list")
