@@ -105,7 +105,9 @@ status bar shows *Hugo · … links*).
   render correctly. `[[wiki links]]` are marked in orange because Hugo can't build them.
 - **Preview pane** (⇧⌘P, sidebar button) shows the page the way the site renders it, with
   its own theme, from `hugo server`. Edits are saved a moment after you type, so Hugo
-  rebuilds and the pane reloads by itself. It follows the editor's scroll position.
+  rebuilds and the pane reloads by itself. It follows the editor heading by heading.
+- **Multilingual sites**: translations by file name (`post.tr.md`) or per-language content
+  folders. Links, completion and new pages stay in the note's language.
 - **Preview in Browser** (⌥⌘P, globe button) opens the same page in your browser. The
   page address comes from `hugo list all`, so `slug`, `url` and `permalinks` are honoured.
   The server stops when you quit. **File → New Hugo Page…** creates a page.
@@ -121,7 +123,9 @@ status bar shows *Hugo · … links*).
 - **Status bar**: file path (click to show in Finder), line and column, word, character
   and line counts, and counts for the selection.
 - macOS autosave, versions, rename / move, and reloading files that changed on disk.
-- The **About** window shows the vibe-coded notice in your language.
+- **Quick Open** (⌘P) for notes in the folder or pages of the Hugo site, **Go to Heading** (⇧⌘O).
+- English and **Turkish** interface, following the system language. The **About** window
+  shows the vibe-coded notice in your language (12 languages).
 
 ## Safety
 
@@ -160,6 +164,8 @@ Every formatting command toggles: use it again to remove it. All edits can be un
 | ⌘0 · ⌘1 · ⌘2 · ⌘3 | Paragraph · Heading 1–3 (4–6 in the Format menu) |
 | ⌘-click | Follow a link, or open an embedded note |
 | ⌘E | Source mode |
+| ⌘P | Quick Open |
+| ⇧⌘O | Go to Heading |
 | ⇧⌘P | Preview pane (Hugo) |
 | ⌥⌘P | Preview in browser (Hugo) |
 
@@ -170,9 +176,9 @@ Format menu. Images can also be pasted or dropped.
 
 - Tables wider than the text column stay as markdown.
 - Embeds render only when they are alone on their line; nested embeds are not expanded.
-- The preview pane keeps its place by relative scroll position, not by matching
-  paragraphs, so on pages with large images or shortcodes it can be a little off.
-- Multilingual Hugo sites (`post.tr.md`) are not handled specially yet.
+- The preview pane matches headings; between two headings it scrolls proportionally, so
+  long sections with large images or shortcodes can be a little off.
+- Only English and Turkish interface translations so far (`Resources/<lang>.lproj`).
 - No Zola or 11ty mode yet; there, notes behave as plain folders.
 
 ## Build from source

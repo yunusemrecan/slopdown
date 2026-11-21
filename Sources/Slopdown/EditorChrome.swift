@@ -72,10 +72,10 @@ final class StatusBarView: NSView {
         fileURL = url
         if let url {
             pathButton.title = (url.path as NSString).abbreviatingWithTildeInPath
-            pathButton.toolTip = "Show in Finder — \(url.path)"
+            pathButton.toolTip = LF("Show in Finder — %@", url.path)
             pathButton.isEnabled = true
         } else {
-            pathButton.title = "Not saved"
+            pathButton.title = L("Not saved")
             pathButton.toolTip = nil
             pathButton.isEnabled = false
         }
@@ -88,24 +88,24 @@ final class StatusBarView: NSView {
         }
         siteButton.isHidden = false
         let menu = NSMenu()
-        menu.addItem(withTitle: "Hugo · \(c.style.shortName) links", action: nil, keyEquivalent: "") // pull-down title
-        let header = menu.addItem(withTitle: "Write links as", action: nil, keyEquivalent: "")
+        menu.addItem(withTitle: LF("Hugo · %@ links", L(c.style.shortName)), action: nil, keyEquivalent: "") // pull-down title
+        let header = menu.addItem(withTitle: L("Write links as"), action: nil, keyEquivalent: "")
         header.isEnabled = false
         for style in HugoLinkStyle.allCases {
-            let item = menu.addItem(withTitle: style.title, action: #selector(EditorWindowController.chooseLinkStyle(_:)), keyEquivalent: "")
+            let item = menu.addItem(withTitle: L(style.title), action: #selector(EditorWindowController.chooseLinkStyle(_:)), keyEquivalent: "")
             item.representedObject = style.rawValue
             item.state = c.style == style ? .on : .off
             item.indentationLevel = 1
         }
-        let auto = menu.addItem(withTitle: "Use what the site uses (\(site.detected.style.shortName))",
+        let auto = menu.addItem(withTitle: LF("Use what the site uses (%@)", L(site.detected.style.shortName)),
                                 action: #selector(EditorWindowController.chooseLinkStyle(_:)), keyEquivalent: "")
         auto.indentationLevel = 1
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Preview in Browser", action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "")
-        menu.addItem(withTitle: "New Page…", action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
-        menu.addItem(withTitle: "Show Site in Finder", action: #selector(EditorWindowController.revealSite(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: L("Preview in Browser"), action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: L("New Page…"), action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: L("Show Site in Finder"), action: #selector(EditorWindowController.revealSite(_:)), keyEquivalent: "")
         siteButton.menu = menu
-        siteButton.toolTip = "Hugo site: \(site.root.path)"
+        siteButton.toolTip = LF("Hugo site: %@", site.root.path)
     }
 
     @objc private func revealInFinder(_ sender: Any?) {
@@ -122,14 +122,14 @@ final class StatusBarView: NSView {
     static func format(_ n: Int) -> String { number.string(from: NSNumber(value: n)) ?? "\(n)" }
 
     func show(stats: TextStats, line: Int, column: Int, selection: TextStats?) {
-        var parts = ["Ln \(line), Col \(column)"]
+        var parts = [LF("Ln %d, Col %d", line, column)]
         if let selection, selection.characters > 0 {
-            parts.append("\(Self.format(selection.words)) of \(Self.format(stats.words)) words selected")
-            parts.append("\(Self.format(selection.characters)) characters")
+            parts.append(LF("%@ of %@ words selected", Self.format(selection.words), Self.format(stats.words)))
+            parts.append(LF("%@ characters", Self.format(selection.characters)))
         } else {
-            parts.append("\(Self.format(stats.words)) \(stats.words == 1 ? "word" : "words")")
-            parts.append("\(Self.format(stats.characters)) characters")
-            parts.append("\(Self.format(stats.lines)) \(stats.lines == 1 ? "line" : "lines")")
+            parts.append(stats.words == 1 ? LF("%@ word", Self.format(stats.words)) : LF("%@ words", Self.format(stats.words)))
+            parts.append(LF("%@ characters", Self.format(stats.characters)))
+            parts.append(stats.lines == 1 ? LF("%@ line", Self.format(stats.lines)) : LF("%@ lines", Self.format(stats.lines)))
         }
         infoLabel.stringValue = parts.joined(separator: "   ·   ")
     }
@@ -192,51 +192,51 @@ extension EditorWindowController: NSToolbarDelegate {
         switch id {
         case .sdHeading:
             let item = NSMenuToolbarItem(itemIdentifier: id)
-            item.label = "Heading"
-            item.paletteLabel = "Heading"
-            item.toolTip = "Heading level"
+            item.label = L("Heading")
+            item.paletteLabel = L("Heading")
+            item.toolTip = L("Heading level")
             item.image = NSImage(systemSymbolName: "textformat.size", accessibilityDescription: "Heading")
             item.menu = Self.headingMenu()
             item.showsIndicator = true
             return item
-        case .sdBold: return button("Bold", "bold", #selector(formatBold(_:)), "Bold (⌘B)")
-        case .sdItalic: return button("Italic", "italic", #selector(formatItalic(_:)), "Italic (⌘I)")
-        case .sdStrike: return button("Strikethrough", "strikethrough", #selector(formatStrikethrough(_:)), "Strikethrough (⇧⌘X)")
-        case .sdCode: return button("Code", "chevron.left.forwardslash.chevron.right", #selector(formatCode(_:)), "Inline code (⌥⌘C)")
-        case .sdLink: return button("Link", "link", #selector(formatLink(_:)), "Link (⌘K)")
-        case .sdWiki: return button("Wiki Link", "note.text", #selector(formatWikiLink(_:)), "Link to a note: [[wiki link]] with completion, or a Hugo link inside a Hugo site (⇧⌘K)")
-        case .sdEmbed: return button("Image", "photo", #selector(formatEmbed(_:)), "Insert an image or embed a note (⇧⌘E). You can also paste or drop images.")
+        case .sdBold: return button(L("Bold"), "bold", #selector(formatBold(_:)), L("Bold (⌘B)"))
+        case .sdItalic: return button(L("Italic"), "italic", #selector(formatItalic(_:)), L("Italic (⌘I)"))
+        case .sdStrike: return button(L("Strikethrough"), "strikethrough", #selector(formatStrikethrough(_:)), L("Strikethrough (⇧⌘X)"))
+        case .sdCode: return button(L("Code"), "chevron.left.forwardslash.chevron.right", #selector(formatCode(_:)), L("Inline code (⌥⌘C)"))
+        case .sdLink: return button(L("Link"), "link", #selector(formatLink(_:)), L("Link (⌘K)"))
+        case .sdWiki: return button(L("Wiki Link"), "note.text", #selector(formatWikiLink(_:)), L("Link to a note: [[wiki link]] with completion, or a Hugo link inside a Hugo site (⇧⌘K)"))
+        case .sdEmbed: return button(L("Image"), "photo", #selector(formatEmbed(_:)), L("Insert an image or embed a note (⇧⌘E). You can also paste or drop images."))
         case .sdLists:
             let item = NSMenuToolbarItem(itemIdentifier: id)
-            item.label = "Lists"
-            item.paletteLabel = "Lists"
-            item.toolTip = "Lists and quotes"
+            item.label = L("Lists")
+            item.paletteLabel = L("Lists")
+            item.toolTip = L("Lists and quotes")
             item.image = NSImage(systemSymbolName: "list.bullet", accessibilityDescription: "Lists")
-            let menu = NSMenu(title: "Lists")
-            menu.addItem(withTitle: "Bulleted List", action: #selector(formatBulletList(_:)), keyEquivalent: "")
-            menu.addItem(withTitle: "Numbered List", action: #selector(formatNumberedList(_:)), keyEquivalent: "")
-            menu.addItem(withTitle: "Task List", action: #selector(formatTaskList(_:)), keyEquivalent: "")
-            menu.addItem(withTitle: "Quote", action: #selector(formatQuote(_:)), keyEquivalent: "")
+            let menu = NSMenu(title: L("Lists"))
+            menu.addItem(withTitle: L("Bulleted List"), action: #selector(formatBulletList(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: L("Numbered List"), action: #selector(formatNumberedList(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: L("Task List"), action: #selector(formatTaskList(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: L("Quote"), action: #selector(formatQuote(_:)), keyEquivalent: "")
             item.menu = menu
             item.showsIndicator = true
             return item
-        case .sdBullet: return button("Bullets", "list.bullet", #selector(formatBulletList(_:)), "Bulleted list")
-        case .sdNumbered: return button("Numbers", "list.number", #selector(formatNumberedList(_:)), "Numbered list")
-        case .sdTask: return button("Tasks", "checklist", #selector(formatTaskList(_:)), "Task list")
-        case .sdQuote: return button("Quote", "text.quote", #selector(formatQuote(_:)), "Quote")
-        case .sdPane: return button("Preview Pane", "sidebar.right", #selector(togglePreviewPane(_:)), "Preview pane: the page as the Hugo site renders it (⇧⌘P)")
-        case .sdPreview: return button("Preview", "globe", #selector(previewInBrowser(_:)), "Preview in browser with hugo server (⌥⌘P)")
-        case .sdSource: return button("Source", "doc.plaintext", #selector(toggleSourceMode(_:)), "Source mode (⌘E)")
+        case .sdBullet: return button(L("Bullets"), "list.bullet", #selector(formatBulletList(_:)), L("Bulleted list"))
+        case .sdNumbered: return button(L("Numbers"), "list.number", #selector(formatNumberedList(_:)), L("Numbered list"))
+        case .sdTask: return button(L("Tasks"), "checklist", #selector(formatTaskList(_:)), L("Task list"))
+        case .sdQuote: return button(L("Quote"), "text.quote", #selector(formatQuote(_:)), L("Quote"))
+        case .sdPane: return button(L("Preview Pane"), "sidebar.right", #selector(togglePreviewPane(_:)), L("Preview pane: the page as the Hugo site renders it (⇧⌘P)"))
+        case .sdPreview: return button(L("Preview"), "globe", #selector(previewInBrowser(_:)), L("Preview in browser with hugo server (⌥⌘P)"))
+        case .sdSource: return button(L("Source"), "doc.plaintext", #selector(toggleSourceMode(_:)), L("Source mode (⌘E)"))
         default: return nil
         }
     }
 
     /// Paragraph / Heading 1–6; each item's tag is the level (0 = paragraph).
     static func headingMenu() -> NSMenu {
-        let menu = NSMenu(title: "Heading")
-        menu.addItem(withTitle: "Paragraph", action: #selector(formatHeading(_:)), keyEquivalent: "").tag = 0
+        let menu = NSMenu(title: L("Heading"))
+        menu.addItem(withTitle: L("Paragraph"), action: #selector(formatHeading(_:)), keyEquivalent: "").tag = 0
         for level in 1...6 {
-            menu.addItem(withTitle: "Heading \(level)", action: #selector(formatHeading(_:)), keyEquivalent: "").tag = level
+            menu.addItem(withTitle: LF("Heading %d", level), action: #selector(formatHeading(_:)), keyEquivalent: "").tag = level
         }
         return menu
     }
@@ -256,14 +256,14 @@ extension EditorWindowController: NSToolbarDelegate {
         window?.makeFirstResponder(tv)
     }
 
-    @objc func formatBold(_ sender: Any?) { applyFormatting("Bold") { Formatting.toggleInline($0, $1, marker: "**") } }
-    @objc func formatItalic(_ sender: Any?) { applyFormatting("Italic") { Formatting.toggleInline($0, $1, marker: "*") } }
-    @objc func formatStrikethrough(_ sender: Any?) { applyFormatting("Strikethrough") { Formatting.toggleInline($0, $1, marker: "~~") } }
-    @objc func formatCode(_ sender: Any?) { applyFormatting("Code") { Formatting.toggleInline($0, $1, marker: "`") } }
+    @objc func formatBold(_ sender: Any?) { applyFormatting(L("Bold")) { Formatting.toggleInline($0, $1, marker: "**") } }
+    @objc func formatItalic(_ sender: Any?) { applyFormatting(L("Italic")) { Formatting.toggleInline($0, $1, marker: "*") } }
+    @objc func formatStrikethrough(_ sender: Any?) { applyFormatting(L("Strikethrough")) { Formatting.toggleInline($0, $1, marker: "~~") } }
+    @objc func formatCode(_ sender: Any?) { applyFormatting(L("Code")) { Formatting.toggleInline($0, $1, marker: "`") } }
     @objc func formatLink(_ sender: Any?) {
-        guard site != nil else { applyFormatting("Link", Formatting.link); return }
+        guard site != nil else { applyFormatting(L("Link"), Formatting.link); return }
         let context = linkContext
-        applyFormatting("Link") { text, sel in
+        applyFormatting(L("Link")) { text, sel in
             let ns = text as NSString
             let selected = ns.substring(with: sel)
             if LinkResolver.isExternal(selected.trimmingCharacters(in: .whitespaces)) { return Formatting.link(text, sel) }
@@ -275,12 +275,12 @@ extension EditorWindowController: NSToolbarDelegate {
     /// `[[…]]` (the completion list opens as you type); in a Hugo site, a link in the
     /// site's convention instead, since Hugo can't build wiki links.
     @objc func formatWikiLink(_ sender: Any?) {
-        if site != nil { formatLink(sender) } else { applyFormatting("Wiki Link", Formatting.wikiLink) }
+        if site != nil { formatLink(sender) } else { applyFormatting(L("Wiki Link"), Formatting.wikiLink) }
     }
 
     /// `![[…]]` with completion of images and notes; in a Hugo site, choose an image file.
     @objc func formatEmbed(_ sender: Any?) {
-        if site != nil { insertImage(sender) } else { applyFormatting("Embed", Formatting.embed) }
+        if site != nil { insertImage(sender) } else { applyFormatting(L("Embed"), Formatting.embed) }
     }
 
     // MARK: - Hugo site actions
@@ -293,8 +293,8 @@ extension EditorWindowController: NSToolbarDelegate {
     @objc func previewInBrowser(_ sender: Any?) {
         guard let site, let page = markdownDocument?.fileURL else {
             let alert = NSAlert()
-            alert.messageText = "Not part of a Hugo site"
-            alert.informativeText = "Preview runs “hugo server” for the site this note belongs to. Open a note from a Hugo site’s content folder."
+            alert.messageText = L("Not part of a Hugo site")
+            alert.informativeText = L("Preview runs “hugo server” for the site this note belongs to. Open a note from a Hugo site’s content folder.")
             if let window { alert.beginSheetModal(for: window) }
             return
         }
@@ -312,7 +312,7 @@ extension EditorWindowController: NSToolbarDelegate {
         panel.directoryURL = doc.deletingLastPathComponent()
         panel.nameFieldStringValue = "new-page.md"
         panel.allowedContentTypes = [.init(filenameExtension: "md")!]
-        panel.message = "New page in “\(site.root.lastPathComponent)”"
+        panel.message = LF("New page in “%@”", site.root.lastPathComponent)
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
             self.createAndOpen(url, contents: HugoSite.frontMatter(for: url, toml: self.conventions?.tomlFrontMatter ?? true))
@@ -323,14 +323,14 @@ extension EditorWindowController: NSToolbarDelegate {
         guard let site else { return }
         NSWorkspace.shared.activateFileViewerSelecting([site.root])
     }
-    @objc func formatBulletList(_ sender: Any?) { applyFormatting("Bulleted List") { Formatting.setLineFormat($0, $1, .bullet) } }
-    @objc func formatNumberedList(_ sender: Any?) { applyFormatting("Numbered List") { Formatting.setLineFormat($0, $1, .numbered) } }
-    @objc func formatTaskList(_ sender: Any?) { applyFormatting("Task List") { Formatting.setLineFormat($0, $1, .task) } }
-    @objc func formatQuote(_ sender: Any?) { applyFormatting("Quote") { Formatting.setLineFormat($0, $1, .quote) } }
+    @objc func formatBulletList(_ sender: Any?) { applyFormatting(L("Bulleted List")) { Formatting.setLineFormat($0, $1, .bullet) } }
+    @objc func formatNumberedList(_ sender: Any?) { applyFormatting(L("Numbered List")) { Formatting.setLineFormat($0, $1, .numbered) } }
+    @objc func formatTaskList(_ sender: Any?) { applyFormatting(L("Task List")) { Formatting.setLineFormat($0, $1, .task) } }
+    @objc func formatQuote(_ sender: Any?) { applyFormatting(L("Quote")) { Formatting.setLineFormat($0, $1, .quote) } }
 
     @objc func formatHeading(_ sender: Any?) {
         let level = (sender as? NSMenuItem)?.tag ?? 1
-        applyFormatting(level == 0 ? "Paragraph" : "Heading \(level)") {
+        applyFormatting(level == 0 ? L("Paragraph") : LF("Heading %d", level)) {
             Formatting.setLineFormat($0, $1, level == 0 ? .paragraph : .heading(level))
         }
     }

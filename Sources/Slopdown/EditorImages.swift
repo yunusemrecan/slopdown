@@ -43,8 +43,8 @@ extension EditorWindowController {
         guard !files.isEmpty || data != nil else { return false }
         guard let doc = markdownDocument?.fileURL else {
             let alert = NSAlert()
-            alert.messageText = "Save this note first"
-            alert.informativeText = "Images are saved next to the note, so it needs a place on disk."
+            alert.messageText = L("Save this note first")
+            alert.informativeText = L("Images are saved next to the note, so it needs a place on disk.")
             if let window { alert.beginSheetModal(for: window) }
             return true
         }
@@ -78,7 +78,7 @@ extension EditorWindowController {
         let sel = tv.selectedRange()
         let text = links.joined(separator: "\n")
         styler.resolutions.invalidate()
-        replace(sel, with: text, actionName: targets.count == 1 ? "Insert Image" : "Insert Images")
+        replace(sel, with: text, actionName: targets.count == 1 ? L("Insert Image") : L("Insert Images"))
         tv.setSelectedRange(NSRange(location: sel.location + (text as NSString).length, length: 0))
         return true
     }
@@ -90,8 +90,8 @@ extension EditorWindowController {
         panel.directoryURL = Attachments.folder(for: doc, site: site)
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = true
-        panel.message = "Choose images to insert"
-        panel.prompt = "Insert"
+        panel.message = L("Choose images to insert")
+        panel.prompt = L("Insert")
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, !panel.urls.isEmpty else { return }
             let pb = NSPasteboard(name: NSPasteboard.Name("slopdown.insert.\(UUID().uuidString)"))

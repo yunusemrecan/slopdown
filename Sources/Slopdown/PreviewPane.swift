@@ -126,7 +126,7 @@ final class PreviewPane: NSView, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        showMessage("Couldn’t load the preview.\n\(error.localizedDescription)")
+        showMessage(LF("Couldn’t load the preview.\n%@", error.localizedDescription))
     }
 }
 #endif

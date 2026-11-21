@@ -181,7 +181,7 @@ final class MarkdownStyler {
                 t.set([.foregroundColor: NSColor.systemOrange,
                        .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
                        .underlineColor: NSColor.systemOrange,
-                       .toolTip: "Hugo doesn’t understand [[wiki links]]. Use ⇧⌘K to insert a link Hugo can build."], r)
+                       .toolTip: L("Hugo doesn’t understand [[wiki links]]. Use ⇧⌘K to insert a link Hugo can build.")], r)
             case .resolved, .unresolved:
                 let color = look == .resolved ? Theme.linkColor : Theme.unresolvedLinkColor
                 t.set([.foregroundColor: color, .underlineStyle: NSUnderlineStyle.single.rawValue,

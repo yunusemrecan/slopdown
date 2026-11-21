@@ -40,113 +40,113 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // App
         let app = submenu(main, name)
-        app.addItem(withTitle: "About \(name)", action: #selector(showAbout(_:)), keyEquivalent: "")
+        app.addItem(withTitle: LF("About %@", name), action: #selector(showAbout(_:)), keyEquivalent: "")
         app.addItem(.separator())
-        let services = NSMenu(title: "Services")
-        app.addItem(withTitle: "Services", action: nil, keyEquivalent: "").submenu = services
+        let services = NSMenu(title: L("Services"))
+        app.addItem(withTitle: L("Services"), action: nil, keyEquivalent: "").submenu = services
         NSApp.servicesMenu = services
         app.addItem(.separator())
-        app.addItem(withTitle: "Hide \(name)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        app.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: LF("Hide %@", name), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: L("Hide Others"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
             .keyEquivalentModifierMask = [.command, .option]
-        app.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        app.addItem(withTitle: L("Show All"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
         app.addItem(.separator())
-        app.addItem(withTitle: "Quit \(name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: LF("Quit %@", name), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         // File
-        let file = submenu(main, "File")
-        file.addItem(withTitle: "New", action: Selector(("newDocument:")), keyEquivalent: "n")
-        file.addItem(withTitle: "Open…", action: Selector(("openDocument:")), keyEquivalent: "o")
-        let recent = NSMenu(title: "Open Recent")
-        recent.addItem(withTitle: "Clear Menu", action: Selector(("clearRecentDocuments:")), keyEquivalent: "")
+        let file = submenu(main, L("File"))
+        file.addItem(withTitle: L("New"), action: Selector(("newDocument:")), keyEquivalent: "n")
+        file.addItem(withTitle: L("Open…"), action: Selector(("openDocument:")), keyEquivalent: "o")
+        let recent = NSMenu(title: L("Open Recent"))
+        recent.addItem(withTitle: L("Clear Menu"), action: Selector(("clearRecentDocuments:")), keyEquivalent: "")
         // Lets NSDocumentController fill this menu (what a nib's "Open Recent" does).
         let setName = NSSelectorFromString("_setMenuName:")
         if recent.responds(to: setName) { recent.perform(setName, with: "NSRecentDocumentsMenu") }
-        file.addItem(withTitle: "Open Recent", action: nil, keyEquivalent: "").submenu = recent
-        file.addItem(withTitle: "Quick Open…", action: #selector(EditorWindowController.quickOpen(_:)), keyEquivalent: "p")
-        file.addItem(withTitle: "New Hugo Page…", action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
-        let preview = file.addItem(withTitle: "Preview in Browser", action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "p")
+        file.addItem(withTitle: L("Open Recent"), action: nil, keyEquivalent: "").submenu = recent
+        file.addItem(withTitle: L("Quick Open…"), action: #selector(EditorWindowController.quickOpen(_:)), keyEquivalent: "p")
+        file.addItem(withTitle: L("New Hugo Page…"), action: #selector(EditorWindowController.newHugoPage(_:)), keyEquivalent: "")
+        let preview = file.addItem(withTitle: L("Preview in Browser"), action: #selector(EditorWindowController.previewInBrowser(_:)), keyEquivalent: "p")
         preview.keyEquivalentModifierMask = [.command, .option]
         file.addItem(.separator())
-        file.addItem(withTitle: "Close", action: Selector(("performClose:")), keyEquivalent: "w")
-        file.addItem(withTitle: "Save…", action: Selector(("saveDocument:")), keyEquivalent: "s")
-        file.addItem(withTitle: "Duplicate", action: Selector(("duplicateDocument:")), keyEquivalent: "S")
-        file.addItem(withTitle: "Rename…", action: Selector(("renameDocument:")), keyEquivalent: "")
-        file.addItem(withTitle: "Move To…", action: Selector(("moveDocument:")), keyEquivalent: "")
-        file.addItem(withTitle: "Revert to Saved", action: Selector(("revertDocumentToSaved:")), keyEquivalent: "")
+        file.addItem(withTitle: L("Close"), action: Selector(("performClose:")), keyEquivalent: "w")
+        file.addItem(withTitle: L("Save…"), action: Selector(("saveDocument:")), keyEquivalent: "s")
+        file.addItem(withTitle: L("Duplicate"), action: Selector(("duplicateDocument:")), keyEquivalent: "S")
+        file.addItem(withTitle: L("Rename…"), action: Selector(("renameDocument:")), keyEquivalent: "")
+        file.addItem(withTitle: L("Move To…"), action: Selector(("moveDocument:")), keyEquivalent: "")
+        file.addItem(withTitle: L("Revert to Saved"), action: Selector(("revertDocumentToSaved:")), keyEquivalent: "")
 
         // Edit
-        let edit = submenu(main, "Edit")
-        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        let edit = submenu(main, L("Edit"))
+        edit.addItem(withTitle: L("Undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: L("Redo"), action: Selector(("redo:")), keyEquivalent: "Z")
         edit.addItem(.separator())
-        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(withTitle: L("Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: L("Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: L("Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         edit.addItem(.separator())
-        let find = NSMenu(title: "Find")
+        let find = NSMenu(title: L("Find"))
         func findItem(_ title: String, _ key: String, _ action: NSTextFinder.Action, _ mods: NSEvent.ModifierFlags = .command) {
             let item = find.addItem(withTitle: title, action: Selector(("performTextFinderAction:")), keyEquivalent: key)
             item.tag = action.rawValue
             item.keyEquivalentModifierMask = mods
         }
-        findItem("Find…", "f", .showFindInterface)
-        findItem("Find and Replace…", "f", .showReplaceInterface, [.command, .option])
-        findItem("Find Next", "g", .nextMatch)
-        findItem("Find Previous", "G", .previousMatch)
-        findItem("Use Selection for Find", "e", .setSearchString, [.command, .option])
-        edit.addItem(withTitle: "Find", action: nil, keyEquivalent: "").submenu = find
+        findItem(L("Find…"), "f", .showFindInterface)
+        findItem(L("Find and Replace…"), "f", .showReplaceInterface, [.command, .option])
+        findItem(L("Find Next"), "g", .nextMatch)
+        findItem(L("Find Previous"), "G", .previousMatch)
+        findItem(L("Use Selection for Find"), "e", .setSearchString, [.command, .option])
+        edit.addItem(withTitle: L("Find"), action: nil, keyEquivalent: "").submenu = find
 
         // Format
-        let format = submenu(main, "Format")
+        let format = submenu(main, L("Format"))
         func fmt(_ title: String, _ action: Selector, _ key: String = "", _ mods: NSEvent.ModifierFlags = .command, tag: Int = 0) {
             let item = format.addItem(withTitle: title, action: action, keyEquivalent: key)
             item.keyEquivalentModifierMask = mods
             item.tag = tag
         }
-        fmt("Bold", #selector(EditorWindowController.formatBold(_:)), "b")
-        fmt("Italic", #selector(EditorWindowController.formatItalic(_:)), "i")
-        fmt("Strikethrough", #selector(EditorWindowController.formatStrikethrough(_:)), "X")
-        fmt("Inline Code", #selector(EditorWindowController.formatCode(_:)), "c", [.command, .option])
+        fmt(L("Bold"), #selector(EditorWindowController.formatBold(_:)), "b")
+        fmt(L("Italic"), #selector(EditorWindowController.formatItalic(_:)), "i")
+        fmt(L("Strikethrough"), #selector(EditorWindowController.formatStrikethrough(_:)), "X")
+        fmt(L("Inline Code"), #selector(EditorWindowController.formatCode(_:)), "c", [.command, .option])
         format.addItem(.separator())
-        fmt("Link", #selector(EditorWindowController.formatLink(_:)), "k")
-        fmt("Wiki Link", #selector(EditorWindowController.formatWikiLink(_:)), "K")
-        fmt("Embed", #selector(EditorWindowController.formatEmbed(_:)), "E")
+        fmt(L("Link"), #selector(EditorWindowController.formatLink(_:)), "k")
+        fmt(L("Wiki Link"), #selector(EditorWindowController.formatWikiLink(_:)), "K")
+        fmt(L("Embed"), #selector(EditorWindowController.formatEmbed(_:)), "E")
         format.addItem(.separator())
-        fmt("Paragraph", #selector(EditorWindowController.formatHeading(_:)), "0", tag: 0)
+        fmt(L("Paragraph"), #selector(EditorWindowController.formatHeading(_:)), "0", tag: 0)
         for level in 1...6 {
-            fmt("Heading \(level)", #selector(EditorWindowController.formatHeading(_:)),
+            fmt(LF("Heading %d", level), #selector(EditorWindowController.formatHeading(_:)),
                 level <= 3 ? "\(level)" : "", tag: level)
         }
         format.addItem(.separator())
-        fmt("Bulleted List", #selector(EditorWindowController.formatBulletList(_:)))
-        fmt("Numbered List", #selector(EditorWindowController.formatNumberedList(_:)))
-        fmt("Task List", #selector(EditorWindowController.formatTaskList(_:)))
-        fmt("Quote", #selector(EditorWindowController.formatQuote(_:)))
+        fmt(L("Bulleted List"), #selector(EditorWindowController.formatBulletList(_:)))
+        fmt(L("Numbered List"), #selector(EditorWindowController.formatNumberedList(_:)))
+        fmt(L("Task List"), #selector(EditorWindowController.formatTaskList(_:)))
+        fmt(L("Quote"), #selector(EditorWindowController.formatQuote(_:)))
 
         // View
-        let view = submenu(main, "View")
+        let view = submenu(main, L("View"))
         view.delegate = self
-        sourceModeItem = view.addItem(withTitle: "Source Mode",
+        sourceModeItem = view.addItem(withTitle: L("Source Mode"),
                                       action: #selector(EditorWindowController.toggleSourceMode(_:)), keyEquivalent: "e")
-        previewPaneItem = view.addItem(withTitle: "Preview Pane",
+        previewPaneItem = view.addItem(withTitle: L("Preview Pane"),
                                        action: #selector(EditorWindowController.togglePreviewPane(_:)), keyEquivalent: "P")
-        view.addItem(withTitle: "Go to Heading…", action: #selector(EditorWindowController.goToHeading(_:)), keyEquivalent: "O")
+        view.addItem(withTitle: L("Go to Heading…"), action: #selector(EditorWindowController.goToHeading(_:)), keyEquivalent: "O")
         view.addItem(.separator())
-        view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        view.addItem(withTitle: L("Enter Full Screen"), action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]
 
         // Window
-        let window = submenu(main, "Window")
-        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        let window = submenu(main, L("Window"))
+        window.addItem(withTitle: L("Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        window.addItem(withTitle: L("Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         window.addItem(.separator())
-        window.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        window.addItem(withTitle: L("Bring All to Front"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         NSApp.windowsMenu = window
 
         // Help
-        let help = submenu(main, "Help")
+        let help = submenu(main, L("Help"))
         NSApp.helpMenu = help
 
         return main

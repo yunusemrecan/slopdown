@@ -17,6 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: swift test --filter SlopdownCoreTests
+      - name: Every UI string is translated
+        run: python3 scripts/check_strings.py
 
   build:
     name: Build Slopdown.app (Apple Silicon)
@@ -51,6 +53,13 @@ jobs:
           ls screenshots
           if grep -q "FAIL" autotest.log; then echo "Autotest failures"; exit 1; fi
           test -f screenshots/Welcome-0.png || { echo "No screenshots written"; exit 1; }
+
+      - name: Turkish UI
+        run: |
+          SLOPDOWN_AUTOTEST="" SLOPDOWN_AUTOTEST_MENU=1 \
+            perl -e 'alarm 60; exec @ARGV' dist/Slopdown.app/Contents/MacOS/Slopdown -AppleLanguages '(tr)' | tee lang.log
+          grep -q "Dosya | Düzen | Biçim | Görüntü | Pencere | Yardım" lang.log
+          grep -q "Kalın | Satır 3, Sütun 4 | Bu uygulama" lang.log
 
       - name: Build release app (no self-test)
         run: |

@@ -154,9 +154,9 @@ final class HugoPreview {
 
     static func failureMessage(_ output: String) -> (title: String, detail: String) {
         if output.contains("command not found") || output.contains("not found: hugo") {
-            return ("Hugo isn’t installed", "Install it with Homebrew:\n\nbrew install hugo")
+            return (L("Hugo isn’t installed"), L("Install it with Homebrew:\n\nbrew install hugo"))
         }
-        return ("hugo server didn’t start", String(output.suffix(1200)))
+        return (L("hugo server didn’t start"), String(output.suffix(1200)))
     }
 
     static func showFailure(_ output: String, window: NSWindow?) {

@@ -9,14 +9,15 @@ sınayamıyor. Bu liste onlar için.
 sırayla dene. Bir sorun görürsen test numarasıyla birlikte yaz (ör. "L3: link yeni pencerede
 değil, aynı pencerede açıldı"). Geçenleri işaretlemen yeterli.
 
-Son güncelleme: 21 Kasım 2026
+Son güncelleme: 21 Kasım 2026 (Türkçe arayüz, hızlı açma, başlığa göre panel, çok dilli Hugo eklendi)
 
 ---
 
 ## A. Açılış ve genel
 
 - [ ] **A1** — Uygulama açılıyor; Dock'ta ikon (M↓ ve yıldızlar) görünüyor.
-- [ ] **A2** — Slopdown → About Slopdown: turuncu "⚠︎ Vibe-coded" uyarısı **Türkçe** görünüyor.
+- [ ] **A2** — Slopdown → Slopdown Hakkında: turuncu "⚠︎ Vibe-coded" uyarısı **Türkçe** görünüyor.
+- [ ] **A5** — Mac'in dili Türkçeyken menüler, araç çubuğu ipuçları, durum çubuğu ve uyarı pencereleri Türkçe. Sistem Ayarları → Genel → Dil ve Bölge → Uygulamalar'dan Slopdown'u İngilizceye alınca her şey İngilizce. Çevirisi tuhaf ya da kesilen metin varsa ekran görüntüsüyle yaz.
 - [ ] **A3** — Açık ve koyu modda (Sistem Ayarları → Görünüm) metin, kod blokları, tablo, alıntı çizgisi okunaklı.
 - [ ] **A4** — Pencereyi daralt/genişlet: metin ortalı kalıyor, resimler genişliğe göre küçülüyor.
 
@@ -61,6 +62,13 @@ Son güncelleme: 21 Kasım 2026
 - [ ] **C6** — `![[ink` yaz: listede `inkwell.png` resmi de çıkıyor.
 - [ ] **C7** — Liste ekranın altına taşıyorsa satırın üstünde açılıyor.
 
+## Q. Hızlı açma ve başlıklar
+
+- [ ] **Q1** — ⌘P: pencerenin üstünde arama kutusu açılıyor; yazdıkça klasördeki notlar süzülüyor; ↑↓ ve Return ile seçilen not yeni pencerede açılıyor; Esc kapatıyor.
+- [ ] **Q2** — Hugo sitesinde ⌘P: sayfalar frontmatter başlıklarıyla listeleniyor.
+- [ ] **Q3** — ⇧⌘O: notun başlıkları düzeyine göre girintili listeleniyor; seçince imleç o başlığa gidiyor.
+- [ ] **Q4** — Arama kutusu açıkken başka bir pencereye tıklayınca kutu kapanıyor.
+
 ## I. Resimler
 
 - [ ] **I1** — Bir ekran görüntüsü al (⌃⇧⌘4 → panoya), notta ⌘V: `pasted-image-…png` dosyası notun yanına kaydediliyor, `![[…]]` ekleniyor, resim görünüyor.
@@ -76,12 +84,13 @@ Son güncelleme: 21 Kasım 2026
 - [ ] **H3** — `[[wiki link]]` turuncu ve noktalı altı çizili; üstüne gelince açıklama balonu çıkıyor.
 - [ ] **H4** — İlk önizlemede "Run this Hugo site's build?" onayı geliyor; ikinci seferde sormuyor.
 - [ ] **H5** — ⇧⌘P önizleme paneli: sayfa temasıyla açılıyor; yazdıkça birkaç saniye içinde güncelleniyor.
-- [ ] **H6** — Panel açıkken editörü kaydır: panel de aynı bölüme kayıyor.
+- [ ] **H6** — Panel açıkken editörü kaydır: panel **aynı başlığa** kayıyor (sayfanın başında tema başlığı/menü olsa da).
 - [ ] **H7** — Paneldeki bir site içi linke tıkla: panelde açılıyor. Dış bir linke tıkla: tarayıcıda açılıyor.
 - [ ] **H8** — ⌥⌘P: sayfa tarayıcıda açılıyor.
 - [ ] **H9** — File → New Hugo Page…: frontmatter'ı (title, date, draft) dolu yeni sayfa açılıyor.
 - [ ] **H10** — ⇧⌘E: resim seçme penceresi; seçilen resim `static/images`'a kopyalanıp `![](/images/…)` ekleniyor.
 - [ ] **H11** — Sitenin bütün pencerelerini kapat: Etkinlik Monitörü'nde `hugo` süreci kayboluyor.
+- [ ] **H13** — Çok dilli bir sitede (`yazi.tr.md` gibi dosyalar ya da `content/tr` klasörü): Türkçe sayfadan ⌘K ile eklenen linkin tamamlama listesinde yalnızca Türkçe sayfalar var; ⌘+tık Türkçe çeviriyi açıyor; olmayan sayfa `.tr.md` olarak oluşturuluyor.
 - [ ] **H12** — Hugo kurulu değilken (ya da PATH'te yokken) önizleme: "Hugo isn't installed / brew install hugo" mesajı.
 
 ## D. Dosya ve belge davranışı

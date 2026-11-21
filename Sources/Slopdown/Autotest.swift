@@ -19,6 +19,14 @@ enum Autotest {
     }
 
     static func run() {
+        // Language check: log the menu bar titles and quit.
+        if ProcessInfo.processInfo.environment["SLOPDOWN_AUTOTEST_MENU"] != nil {
+            let titles = NSApp.mainMenu?.items.map { $0.submenu?.title ?? $0.title } ?? []
+            log("menu: " + titles.joined(separator: " | "))
+            log("strings: \(L("Bold")) | \(LF("Ln %d, Col %d", 3, 4)) | \(Disclaimer.text().prefix(20))")
+            DispatchQueue.main.async { exit(0) }
+            return
+        }
         var files = (ProcessInfo.processInfo.environment["SLOPDOWN_AUTOTEST"] ?? "")
             .split(separator: ":").map { URL(fileURLWithPath: String($0)) }
         try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)

@@ -37,16 +37,16 @@ extension EditorWindowController {
         guard isPreviewVisible, let previewPane else { return }
         guard let site, let page = markdownDocument?.fileURL else {
             previewPane.showMessage(markdownDocument?.fileURL == nil
-                ? "Save this note to preview it."
-                : "The preview pane shows a page the way its Hugo site renders it.\nThis note isn’t in a Hugo site’s content folder.")
+                ? L("Save this note to preview it.")
+                : L("The preview pane shows a page the way its Hugo site renders it.\nThis note isn’t in a Hugo site’s content folder."))
             return
         }
         guard Self.isTrusted(site) else {
-            previewPane.showMessage("The preview needs permission to run this site’s build.")
+            previewPane.showMessage(L("The preview needs permission to run this site’s build."))
             askToTrust(site) { [weak self] in self?.reloadPreview() }
             return
         }
-        previewPane.showMessage("Starting hugo server…")
+        previewPane.showMessage(L("Starting hugo server…"))
         markdownDocument?.autosave(withImplicitCancellability: false) { _ in }
         HugoPreview.shared.url(of: page, in: site) { [weak self] url, output in
             guard let self, self.isPreviewVisible else { return }

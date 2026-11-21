@@ -180,7 +180,7 @@ extension EditorWindowController {
         let rest = text.substring(with: NSRange(location: end, length: min(3, text.length - end)))
         let insert = item.insert + Completion.closing(for: ctx.kind, after: rest)
         hideCompletion()
-        replace(ctx.partial, with: insert, actionName: "Complete Link")
+        replace(ctx.partial, with: insert, actionName: L("Complete Link"))
         var caret = ctx.partial.location + (insert as NSString).length
         // Already-closed links: put the caret after the existing closing characters.
         if Completion.closing(for: ctx.kind, after: rest).isEmpty {

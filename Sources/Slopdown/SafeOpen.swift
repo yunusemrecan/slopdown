@@ -17,7 +17,7 @@ extension EditorWindowController {
         alert.informativeText = detail
         alert.addButton(withTitle: button)
         if let alternate { alert.addButton(withTitle: alternate.0) }
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Cancel"))
         let handle: (NSApplication.ModalResponse) -> Void = { response in
             if response == .alertFirstButtonReturn { perform() }
             else if response == .alertSecondButtonReturn, let alternate { alternate.1() }
@@ -34,9 +34,9 @@ extension EditorWindowController {
             return
         }
         let app = NSWorkspace.shared.urlForApplication(toOpen: url).map { $0.deletingPathExtension().lastPathComponent }
-        confirm(title: "Open this link\(app.map { " in \($0)" } ?? "")?",
-                detail: "It is not a web link. It will be passed to another app:\n\n\(url.absoluteString)",
-                button: "Open") { NSWorkspace.shared.open(url) }
+        confirm(title: app.map { LF("Open this link in %@?", $0) } ?? L("Open this link?"),
+                detail: LF("It is not a web link. It will be passed to another app:\n\n%@", url.absoluteString),
+                button: L("Open")) { NSWorkspace.shared.open(url) }
     }
 
     /// Images, PDFs and media open; other documents are confirmed; apps, scripts,
@@ -56,16 +56,16 @@ extension EditorWindowController {
             NSWorkspace.shared.open(url)
         case .confirm:
             let app = NSWorkspace.shared.urlForApplication(toOpen: url).map { $0.deletingPathExtension().lastPathComponent }
-            confirm(title: "Open “\(url.lastPathComponent)”\(app.map { " in \($0)" } ?? "")?",
-                    detail: shown, button: "Open", alternate: ("Show in Finder", reveal)) {
+            confirm(title: app.map { LF("Open “%@” in %@?", url.lastPathComponent, $0) } ?? LF("Open “%@”?", url.lastPathComponent),
+                    detail: shown, button: L("Open"), alternate: (L("Show in Finder"), reveal)) {
                 NSWorkspace.shared.open(url)
             }
         case .revealOnly:
             let alert = NSAlert()
-            alert.messageText = "“\(url.lastPathComponent)” was not opened"
-            alert.informativeText = "Opening it could run code (an app, a script or an installer), so Slopdown only shows it in Finder.\n\n\(shown)"
-            alert.addButton(withTitle: "Show in Finder")
-            alert.addButton(withTitle: "Cancel")
+            alert.messageText = LF("“%@” was not opened", url.lastPathComponent)
+            alert.informativeText = LF("Opening it could run code (an app, a script or an installer), so Slopdown only shows it in Finder.\n\n%@", shown)
+            alert.addButton(withTitle: L("Show in Finder"))
+            alert.addButton(withTitle: L("Cancel"))
             let handle: (NSApplication.ModalResponse) -> Void = { if $0 == .alertFirstButtonReturn { reveal() } }
             if let window { alert.beginSheetModal(for: window, completionHandler: handle) } else { handle(alert.runModal()) }
         }
@@ -82,11 +82,10 @@ extension EditorWindowController {
     /// `hugo server` builds the site, and a site's build can run its own code
     /// (PostCSS/Babel config, Hugo modules, external tools it allows). Ask once per site.
     func askToTrust(_ site: HugoSite, then: @escaping () -> Void) {
-        confirm(title: "Run this Hugo site’s build?",
-                detail: "Preview runs “hugo server” in:\n\(( site.root.path as NSString).abbreviatingWithTildeInPath)\n\n"
-                    + "Building a site can run code that comes with the site (PostCSS or Babel settings, Hugo modules, "
-                    + "external tools the site allows). Continue only for sites you trust. Slopdown remembers your answer for this site.",
-                button: "Run Hugo") {
+        confirm(title: L("Run this Hugo site’s build?"),
+                detail: LF("Preview runs “hugo server” in:\n%@\n\nBuilding a site can run code that comes with the site (PostCSS or Babel settings, Hugo modules, external tools the site allows). Continue only for sites you trust. Slopdown remembers your answer for this site.",
+                           (site.root.path as NSString).abbreviatingWithTildeInPath),
+                button: L("Run Hugo")) {
             Self.setTrusted(site)
             then()
         }

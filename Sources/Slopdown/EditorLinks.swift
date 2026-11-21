@@ -36,7 +36,7 @@ extension EditorWindowController {
     func toggleTask(_ e: MDElement) {
         guard case .task(let checked) = e.kind else { return }
         let r = NSRange(location: e.marker.location + 1, length: 1)
-        replace(r, with: checked ? " " : "x", actionName: checked ? "Uncheck Task" : "Check Task")
+        replace(r, with: checked ? " " : "x", actionName: checked ? L("Uncheck Task") : L("Check Task"))
     }
 
     func replace(_ r: NSRange, with s: String, actionName: String) {
@@ -66,8 +66,8 @@ extension EditorWindowController {
         }
         guard let base = context.baseDirectory else {
             let alert = NSAlert()
-            alert.messageText = "Save this note first"
-            alert.informativeText = "Links are looked up relative to the folder the note is saved in."
+            alert.messageText = L("Save this note first")
+            alert.informativeText = L("Links are looked up relative to the folder the note is saved in.")
             alert.beginSheetModal(for: window!)
             return
         }
@@ -100,20 +100,20 @@ extension EditorWindowController {
     func askAboutMissing(target: String, link: MDLink, base: URL, heading: String?) {
         guard let window else { return }
         let alert = NSAlert()
-        alert.messageText = "“\(target)” doesn’t exist"
+        alert.messageText = LF("“%@” doesn’t exist", target)
         var info = site == nil
-            ? "No matching file in “\(base.lastPathComponent)” or its subfolders."
-            : "No page with this path in the site’s “\(base.lastPathComponent)” folder."
+            ? LF("No matching file in “%@” or its subfolders.", base.lastPathComponent)
+            : LF("No page with this path in the site’s “%@” folder.", base.lastPathComponent)
         if let newURL = linkContext.newFileURL(for: link) {
-            info += "\n\nA new file would be created at:\n" + (newURL.path as NSString).abbreviatingWithTildeInPath
+            info += "\n\n" + LF("A new file would be created at:\n%@", (newURL.path as NSString).abbreviatingWithTildeInPath)
             if !LinkSafety.isInside(newURL, creationRoot) {
-                info += "\n\n⚠︎ That is outside “\(creationRoot.lastPathComponent)”."
+                info += "\n\n" + LF("⚠︎ That is outside “%@”.", creationRoot.lastPathComponent)
             }
         }
         alert.informativeText = info
-        alert.addButton(withTitle: site == nil ? "Create New File" : "Create New Page")
-        alert.addButton(withTitle: "Choose File…")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: site == nil ? L("Create New File") : L("Create New Page"))
+        alert.addButton(withTitle: L("Choose File…"))
+        alert.addButton(withTitle: L("Cancel"))
         alert.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
             switch response {
@@ -139,10 +139,10 @@ extension EditorWindowController {
         let create = { self.createAndOpen(url, contents: context.newFileContents(for: url)) }
         guard LinkSafety.isInside(url, creationRoot) else {
             // A link like [[../../Library/x]] must not quietly create files elsewhere.
-            confirm(title: "Create a file outside “\(creationRoot.lastPathComponent)”?",
-                    detail: "The link points outside the note’s folder. The file would be created at:\n\n"
+            confirm(title: LF("Create a file outside “%@”?", creationRoot.lastPathComponent),
+                    detail: L("The link points outside the note’s folder. The file would be created at:\n\n")
                         + (url.path as NSString).abbreviatingWithTildeInPath,
-                    button: "Create File", perform: create)
+                    button: L("Create File"), perform: create)
             return
         }
         create()
@@ -170,12 +170,12 @@ extension EditorWindowController {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.message = "Choose the file this link should point to"
-        panel.prompt = "Link"
+        panel.message = L("Choose the file this link should point to")
+        panel.prompt = L("Use This File")
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
             if let newTarget = self.linkContext.retarget(link, to: url) {
-                self.replace(link.targetRange, with: newTarget, actionName: "Change Link")
+                self.replace(link.targetRange, with: newTarget, actionName: L("Change Link"))
             }
             self.openTarget(url, heading: heading)
         }

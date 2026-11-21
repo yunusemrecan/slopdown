@@ -191,7 +191,7 @@ extension EditorWindowController {
     @objc func quickOpen(_ sender: Any?) {
         guard let window else { return }
         guard markdownDocument?.fileURL != nil else { NSSound.beep(); return }
-        picker.show(quickOpenItems(), placeholder: site == nil ? "Open a note in this folder" : "Open a page of this site",
+        picker.show(quickOpenItems(), placeholder: site == nil ? L("Open a note in this folder") : L("Open a page of this site"),
                     over: window)
     }
 
@@ -199,7 +199,7 @@ extension EditorWindowController {
         guard let window else { return }
         let items = headingItems()
         guard !items.isEmpty else { NSSound.beep(); return }
-        picker.show(items, placeholder: "Go to heading", over: window)
+        picker.show(items, placeholder: L("Go to heading"), over: window)
     }
 }
 #endif
