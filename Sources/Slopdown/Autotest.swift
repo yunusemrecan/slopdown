@@ -207,8 +207,8 @@ enum Autotest {
         pane.onLoad = {
             loads += 1
             if loads == 1 {
-                let path = pane.webView.url?.path ?? ""
-                check("pane-load", path == "/posts/first/", path)
+                let url = pane.webView.url?.absoluteString ?? ""
+                check("pane-load", url.hasSuffix("/posts/first/"), url)
                 pane.webView.evaluateJavaScript("document.title") { title, _ in
                     check("pane-title", (title as? String)?.contains("First Post") == true, String(describing: title))
                     // Edit → autosave → hugo rebuild → live reload
