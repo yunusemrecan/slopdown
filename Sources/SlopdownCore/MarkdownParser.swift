@@ -70,6 +70,106 @@ public enum MarkdownParser {
         return out
     }
 
+    // MARK: - Incremental update
+
+    public struct Update {
+        public var elements: [MDElement]
+        /// Range of the new text whose elements changed (restyle at least this).
+        public var dirty: NSRange
+        public var wasFullParse: Bool
+    }
+
+    /// Re-parses only the paragraphs touched by an edit and splices the result into
+    /// `old`. Falls back to a full parse when the edit can change structure beyond its
+    /// lines (code fences, front matter, tables).
+    ///
+    /// - Parameters:
+    ///   - editedRange: the edited range in the new text (as NSTextStorage reports it)
+    ///   - delta: change in length
+    public static func update(_ old: [MDElement], newText: String, editedRange: NSRange, delta: Int) -> Update {
+        let ns = NSString(string: newText)
+        func full() -> Update {
+            Update(elements: parse(newText), dirty: NSRange(location: 0, length: ns.length), wasFullParse: true)
+        }
+        guard editedRange.location >= 0, NSMaxRange(editedRange) <= ns.length else { return full() }
+        // Include the line the edit ends on: when the inserted text ends with a line
+        // break, the rest of the edited line is now its own line.
+        let reach = NSRange(location: editedRange.location,
+                            length: min(editedRange.length + 1, ns.length - editedRange.location))
+        let dirty = ns.paragraphRange(for: reach)
+        // The same paragraphs in the old text
+        let oldStart = dirty.location
+        let oldEnd = NSMaxRange(dirty) - delta
+        guard oldEnd >= oldStart else { return full() }
+        // Front matter can only start at the top.
+        if dirty.location == 0 { return full() }
+
+        // Structure: anything multi-line in or next to the edited lines?
+        for e in old {
+            switch e.kind {
+            case .codeFence, .codeLine, .frontmatter, .tableRow, .tableDelimiter:
+                let r = e.range
+                if r.location <= oldEnd && NSMaxRange(r) + 1 >= oldStart { return full() }
+            default:
+                continue
+            }
+        }
+        let newLines = ns.substring(with: dirty)
+        // Code fences change everything below them.
+        if newLines.contains("```") || newLines.contains("~~~") { return full() }
+        // An unclosed front matter opener at the top can be closed further down.
+        if ns.hasPrefix("---") || ns.hasPrefix("+++"),
+           newLines.contains("---") || newLines.contains("+++") || newLines.contains("...") {
+            return full()
+        }
+        // A delimiter row turns the line above it into a table header; check the edited
+        // lines and the line just below them.
+        var probe = dirty
+        if NSMaxRange(dirty) < ns.length { probe = NSUnionRange(dirty, ns.lineRange(for: NSRange(location: NSMaxRange(dirty), length: 0))) }
+        if ns.substring(with: probe).contains("|") {
+            var p = probe.location
+            while p < NSMaxRange(probe) {
+                let line = ns.lineRange(for: NSRange(location: p, length: 0))
+                var start = 0, lineEnd = 0, contentsEnd = 0
+                ns.getLineStart(&start, end: &lineEnd, contentsEnd: &contentsEnd, for: NSRange(location: p, length: 0))
+                if let split = splitRow(ns, NSRange(location: start, length: contentsEnd - start)),
+                   split.cells.allSatisfy({ $0.length > 0 && delimiterCellRE.firstMatch(in: newText, options: [], range: $0) != nil }) {
+                    return full()
+                }
+                if NSMaxRange(line) <= p { break }
+                p = NSMaxRange(line)
+            }
+        }
+
+        // Splice: keep elements before, re-parse the dirty lines, shift the rest.
+        var out: [MDElement] = []
+        out.reserveCapacity(old.count + 8)
+        var after: [MDElement] = []
+        // Every element lies within one line, and the dirty range is whole lines, so an
+        // element's start says which side of the edit it is on.
+        for e in old {
+            if e.range.location < oldStart {
+                out.append(e)
+            } else if e.range.location >= oldEnd {
+                after.append(e.shifted(by: delta))
+            }
+        }
+        var fresh: [MDElement] = []
+        let str = newText
+        var pos = dirty.location
+        let end = NSMaxRange(dirty)
+        while pos < end {
+            var start = 0, lineEnd = 0, contentsEnd = 0
+            ns.getLineStart(&start, end: &lineEnd, contentsEnd: &contentsEnd, for: NSRange(location: pos, length: 0))
+            parseLine(str, ns, NSRange(location: start, length: contentsEnd - start), into: &fresh)
+            if lineEnd <= pos { break }
+            pos = lineEnd
+        }
+        out.append(contentsOf: fresh)
+        out.append(contentsOf: after)
+        return Update(elements: out, dirty: dirty, wasFullParse: false)
+    }
+
     // MARK: - Lines
 
     /// Line content ranges (without the line terminator).
@@ -253,7 +353,7 @@ public enum MarkdownParser {
     private static let bulletRE = re(#"^([ \t]*)([-*+])[ \t]+"#)
     private static let orderedRE = re(#"^([ \t]*)(\d{1,9}[.)])[ \t]+"#)
 
-    private static func parseLine(_ str: String, _ ns: NSString, _ line: NSRange, into out: inout [MDElement]) {
+    static func parseLine(_ str: String, _ ns: NSString, _ line: NSRange, into out: inout [MDElement]) {
         guard line.length > 0 else { return }
         var inlineStart = line.location
         let lineEnd = NSMaxRange(line)

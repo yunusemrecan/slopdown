@@ -153,3 +153,48 @@ public extension NSRange {
         i >= location && i < location + length
     }
 }
+
+// MARK: - Shifting (incremental parsing)
+
+extension NSRange {
+    func shifted(_ d: Int) -> NSRange { NSRange(location: location + d, length: length) }
+}
+
+extension MDTableRow {
+    func shifted(by d: Int) -> MDTableRow {
+        var r = self
+        r.table = table.shifted(d)
+        r.pipes = pipes.map { $0.shifted(d) }
+        r.leading = leading?.shifted(d)
+        r.cells = cells.map { $0.shifted(d) }
+        return r
+    }
+}
+
+extension MDElement {
+    /// The same element, `d` UTF-16 units later in the text.
+    public func shifted(by d: Int) -> MDElement {
+        guard d != 0 else { return self }
+        var e = self
+        e.range = range.shifted(d)
+        e.revealRange = revealRange.shifted(d)
+        e.hidden = hidden.map { $0.shifted(d) }
+        e.content = content.shifted(d)
+        e.marker = marker.shifted(d)
+        switch kind {
+        case .link(var l):
+            l.targetRange = l.targetRange.shifted(d)
+            e.kind = .link(l)
+        case .image(var i):
+            i.targetRange = i.targetRange.shifted(d)
+            e.kind = .image(i)
+        case .tableRow(let r):
+            e.kind = .tableRow(r.shifted(by: d))
+        case .tableDelimiter(let r):
+            e.kind = .tableDelimiter(r.shifted(by: d))
+        default:
+            break
+        }
+        return e
+    }
+}

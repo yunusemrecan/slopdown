@@ -110,7 +110,8 @@ final class ResolutionCache {
             if FileManager.default.fileExists(atPath: u.path) { return u }
             hits[key] = nil
         }
-        if let t = misses[key], Date().timeIntervalSince(t) < 4 { return nil }
+        // The folder watcher clears the cache on changes; this is only a fallback.
+        if let t = misses[key], Date().timeIntervalSince(t) < 30 { return nil }
         if let u = resolve() {
             hits[key] = u
             misses[key] = nil

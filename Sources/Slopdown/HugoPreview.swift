@@ -167,6 +167,13 @@ final class HugoPreview {
         if let window { alert.beginSheetModal(for: window) } else { alert.runModal() }
     }
 
+    func stop(_ site: HugoSite) {
+        let key = site.root.path
+        if let s = servers[key], s.process.isRunning { s.process.terminate() }
+        servers[key] = nil
+        pagePaths[key] = nil
+    }
+
     func stopAll() {
         for s in servers.values where s.process.isRunning { s.process.terminate() }
         servers.removeAll()

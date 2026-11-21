@@ -152,6 +152,7 @@ extension NSToolbarItem.Identifier {
     static let sdQuote = Self("sd.quote")
     static let sdSource = Self("sd.source")
     static let sdPreview = Self("sd.preview")
+    static let sdLists = Self("sd.lists")
     static let sdPane = Self("sd.pane")
 }
 
@@ -168,12 +169,12 @@ extension EditorWindowController: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.sdHeading, .sdBold, .sdItalic, .sdStrike, .sdCode, .space,
-         .sdLink, .sdWiki, .sdEmbed, .space,
-         .sdBullet, .sdNumbered, .sdTask, .sdQuote, .flexibleSpace, .sdPane, .sdPreview, .sdSource]
+         .sdLink, .sdWiki, .sdEmbed, .space, .sdLists, .flexibleSpace, .sdPane, .sdSource]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar) + [.flexibleSpace, .space]
+        toolbarDefaultItemIdentifiers(toolbar)
+            + [.sdBullet, .sdNumbered, .sdTask, .sdQuote, .sdPreview, .flexibleSpace, .space]
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
@@ -203,8 +204,22 @@ extension EditorWindowController: NSToolbarDelegate {
         case .sdStrike: return button("Strikethrough", "strikethrough", #selector(formatStrikethrough(_:)), "Strikethrough (⇧⌘X)")
         case .sdCode: return button("Code", "chevron.left.forwardslash.chevron.right", #selector(formatCode(_:)), "Inline code (⌥⌘C)")
         case .sdLink: return button("Link", "link", #selector(formatLink(_:)), "Link (⌘K)")
-        case .sdWiki: return button("Wiki Link", "note.text", #selector(formatWikiLink(_:)), "Link to a note — [[wiki link]], or a Hugo link inside a Hugo site (⇧⌘K)")
-        case .sdEmbed: return button("Embed", "photo", #selector(formatEmbed(_:)), "Insert image or embed (⇧⌘E)")
+        case .sdWiki: return button("Wiki Link", "note.text", #selector(formatWikiLink(_:)), "Link to a note: [[wiki link]] with completion, or a Hugo link inside a Hugo site (⇧⌘K)")
+        case .sdEmbed: return button("Image", "photo", #selector(formatEmbed(_:)), "Insert an image or embed a note (⇧⌘E). You can also paste or drop images.")
+        case .sdLists:
+            let item = NSMenuToolbarItem(itemIdentifier: id)
+            item.label = "Lists"
+            item.paletteLabel = "Lists"
+            item.toolTip = "Lists and quotes"
+            item.image = NSImage(systemSymbolName: "list.bullet", accessibilityDescription: "Lists")
+            let menu = NSMenu(title: "Lists")
+            menu.addItem(withTitle: "Bulleted List", action: #selector(formatBulletList(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: "Numbered List", action: #selector(formatNumberedList(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: "Task List", action: #selector(formatTaskList(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: "Quote", action: #selector(formatQuote(_:)), keyEquivalent: "")
+            item.menu = menu
+            item.showsIndicator = true
+            return item
         case .sdBullet: return button("Bullets", "list.bullet", #selector(formatBulletList(_:)), "Bulleted list")
         case .sdNumbered: return button("Numbers", "list.number", #selector(formatNumberedList(_:)), "Numbered list")
         case .sdTask: return button("Tasks", "checklist", #selector(formatTaskList(_:)), "Task list")
@@ -257,59 +272,15 @@ extension EditorWindowController: NSToolbarDelegate {
         }
     }
 
-    /// Wiki link outside Hugo; inside a Hugo site, pick the page and write a Hugo link.
+    /// `[[…]]` (the completion list opens as you type); in a Hugo site, a link in the
+    /// site's convention instead, since Hugo can't build wiki links.
     @objc func formatWikiLink(_ sender: Any?) {
-        if site != nil { linkToPage(sender) } else { applyFormatting("Wiki Link", Formatting.wikiLink) }
+        if site != nil { formatLink(sender) } else { applyFormatting("Wiki Link", Formatting.wikiLink) }
     }
 
+    /// `![[…]]` with completion of images and notes; in a Hugo site, choose an image file.
     @objc func formatEmbed(_ sender: Any?) {
         if site != nil { insertImage(sender) } else { applyFormatting("Embed", Formatting.embed) }
-    }
-
-    /// Choose a note/page and insert a link to it in the right convention.
-    @objc func linkToPage(_ sender: Any?) {
-        guard let window, let doc = markdownDocument?.fileURL else { NSSound.beep(); return }
-        let panel = NSOpenPanel()
-        panel.directoryURL = site?.contentDir ?? doc.deletingLastPathComponent()
-        panel.allowedContentTypes = [.init(filenameExtension: "md")!, .plainText]
-        panel.message = site == nil ? "Choose a note to link to" : "Choose a page to link to"
-        panel.prompt = "Link"
-        panel.beginSheetModal(for: window) { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
-            self.insertPageLink(to: url)
-        }
-    }
-
-    func insertPageLink(to url: URL) {
-        let context = linkContext
-        applyFormatting("Link") { text, sel in
-            let selected = (text as NSString).substring(with: sel).trimmingCharacters(in: .whitespacesAndNewlines)
-            var title = selected
-            if title.isEmpty {
-                let pageText = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-                title = (self.site != nil ? HugoSite.title(ofPageText: pageText) : nil) ?? url.deletingPathExtension().lastPathComponent
-            }
-            let link = context.pageLink(text: title, to: url) ?? ""
-            let end = sel.location + (link as NSString).length
-            return TextEdit(range: sel, replacement: link, selection: NSRange(location: end, length: 0))
-        }
-    }
-
-    @objc func insertImage(_ sender: Any?) {
-        guard let window, let doc = markdownDocument?.fileURL else { NSSound.beep(); return }
-        let panel = NSOpenPanel()
-        panel.directoryURL = doc.deletingLastPathComponent()
-        panel.allowedContentTypes = [.image]
-        panel.message = "Choose an image"
-        panel.prompt = "Insert"
-        panel.beginSheetModal(for: window) { [weak self] response in
-            guard let self, response == .OK, let url = panel.url,
-                  let link = self.linkContext.imageLink(to: url) else { return }
-            self.applyFormatting("Insert Image") { _, sel in
-                TextEdit(range: sel, replacement: link,
-                         selection: NSRange(location: sel.location + (link as NSString).length, length: 0))
-            }
-        }
     }
 
     // MARK: - Hugo site actions

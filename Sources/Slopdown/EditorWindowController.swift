@@ -6,17 +6,23 @@ import SlopdownCore
 
 final class EditorWindowController: NSWindowController, NSWindowDelegate, NSTextViewDelegate, NSTextStorageDelegate {
     private(set) var textView: EditorTextView!
-    private let storage = NSTextStorage()
+    let storage = NSTextStorage()
     private(set) var statusBar: StatusBarView!
     private(set) var previewPane: PreviewPane!
-    private var splitView: NSSplitView!
+    private(set) var splitView: NSSplitView!
     private var stats = TextStats("")
     private let layoutManager = NSLayoutManager()
     private let concealer = GlyphConcealer()
     let styler = MarkdownStyler()
+    let completion = CompletionState()
+    private var watcher: DirectoryWatcher?
 
     /// Characters changed but the parser has not run yet (element ranges are stale).
-    private var parseIsStale = false
+    private(set) var parseIsStale = false
+    /// The edit since the last parse: (edited range in the new text, change in length).
+    /// nil plus `parseIsStale` means several edits: parse everything.
+    private var pendingEdit: (range: NSRange, delta: Int)?
+    private var pendingEdits = 0
     private static var cascadePoint: NSPoint?
 
     static func make() -> EditorWindowController {
@@ -86,6 +92,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         tv.insertionPointColor = .controlAccentColor
         tv.typingAttributes = Theme.baseAttributes(sourceMode: false)
         tv.delegate = self
+        tv.registerForDraggedTypes(tv.registeredDraggedTypes + [.fileURL, .png, .tiff])
         storage.delegate = self
 
         scroll.documentView = tv
@@ -126,10 +133,19 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     /// The file was saved somewhere else / renamed: links and images resolve differently.
     // MARK: - Status bar
 
+    private var statsAreStale = true
+
+    /// Coalesced: counting a long document on every keystroke would slow typing.
     private func updateStatus(textChanged: Bool) {
+        if textChanged { statsAreStale = true }
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(refreshStatus), object: nil)
+        perform(#selector(refreshStatus), with: nil, afterDelay: textChanged ? 0.25 : 0.05)
+    }
+
+    @objc private func refreshStatus() {
         guard let tv = textView, let statusBar else { return }
         let text = tv.string
-        if textChanged { stats = TextStats(text) }
+        if statsAreStale { stats = TextStats(text); statsAreStale = false }
         let sel = tv.selectedRange()
         let pos = TextStats.lineAndColumn(text, sel.location)
         let selected = sel.length > 0 && NSMaxRange(sel) <= (text as NSString).length
@@ -156,9 +172,35 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         siteChecked = url
         site = url.flatMap { HugoSite.containing($0) }
         statusBar?.setSite(site, conventions: conventions)
+        watchFolder()
     }
 
     /// The project's link conventions, with the user's per-site choice applied.
+    /// Files added, removed or renamed in the note's folder (or the Hugo site) refresh
+    /// link colors, images, embeds and the completion list.
+    private func watchFolder() {
+        guard let doc = markdownDocument?.fileURL else { watcher = nil; return }
+        let root = site?.root ?? doc.deletingLastPathComponent()
+        let ownPath = doc.standardizedFileURL.path
+        watcher = DirectoryWatcher(root: root) { [weak self] paths in
+            let relevant = paths.contains { path in
+                path != ownPath && !path.split(separator: "/").contains(where: { $0.hasPrefix(".") })
+                    && !path.contains("/public/") && !path.contains("/resources/_gen/")
+            }
+            guard relevant, let self else { return }
+            self.styler.resolutions.invalidate()
+            self.completion.index = [:]
+            NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(self.folderChanged), object: nil)
+            self.perform(#selector(self.folderChanged), with: nil, afterDelay: 0.3)
+        }
+    }
+
+    @objc private func folderChanged() {
+        guard !parseIsStale else { return }
+        styler.apply(to: storage, in: NSRange(location: 0, length: storage.length))
+        textView.needsDisplay = true
+    }
+
     var conventions: HugoConventions? {
         guard let site else { return nil }
         var c = site.detected
@@ -193,6 +235,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
         styler.textWidth = textWidth
         styler.reparse(storage.string)
         parseIsStale = false
+        pendingEdit = nil
+        pendingEdits = 0
         styler.revealed = styler.revealedElements(for: selection)
         styler.apply(to: storage, in: NSRange(location: 0, length: storage.length))
         textView.needsDisplay = true
@@ -224,92 +268,61 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
 
     func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
                      range editedRange: NSRange, changeInLength delta: Int) {
-        if editedMask.contains(.editedCharacters) { parseIsStale = true }
+        guard editedMask.contains(.editedCharacters) else { return }
+        parseIsStale = true
+        pendingEdits += 1
+        pendingEdit = (editedRange, delta)
     }
 
-    // MARK: - Preview pane
-
-    var isPreviewVisible: Bool { previewPane.map { !$0.isHidden } ?? false }
-
-    @objc func togglePreviewPane(_ sender: Any?) {
-        guard let window, let previewPane, let splitView else { return }
-        if isPreviewVisible {
-            previewPane.isHidden = true
-            splitView.adjustSubviews()
+    /// After typing: re-parse only the edited paragraphs and restyle only what changed
+    /// (the edited lines and lines whose syntax was or becomes revealed).
+    private func restyleAfterEdit() {
+        guard let edit = pendingEdit, pendingEdits == 1, !styler.sourceMode else {
+            restyleAll()
             return
         }
-        // Make room: widen the window if the editor would get too narrow.
-        var frame = window.frame
-        if frame.width < 1100, let screen = window.screen?.visibleFrame {
-            let extra = min(1100 - frame.width, screen.maxX - frame.maxX + frame.minX - screen.minX)
-            frame.size.width += max(0, extra)
-            frame.origin.x = max(screen.minX, min(frame.minX, screen.maxX - frame.width))
-            window.setFrame(frame, display: true, animate: false)
+        let ns = storage.mutableString as NSString
+        // Revealed elements before the edit, moved to where they are now.
+        let oldEnd = NSMaxRange(edit.range) - edit.delta
+        let previouslyRevealed: [NSRange] = styler.revealed.compactMap { i in
+            guard i < styler.elements.count else { return nil }
+            let r = styler.elements[i].range
+            return r.location >= oldEnd ? NSRange(location: r.location + edit.delta, length: r.length) : r
         }
-        previewPane.isHidden = false
-        splitView.adjustSubviews()
-        splitView.setPosition(splitView.bounds.width * 0.5, ofDividerAt: 0)
-        reloadPreview()
-    }
+        let dirtyRange = styler.update(storage.string, editedRange: edit.range, delta: edit.delta)
+        parseIsStale = false
+        pendingEdit = nil
+        pendingEdits = 0
+        styler.revealed = styler.revealedElements(for: selection)
 
-    /// Points the pane at this note's page on `hugo server`.
-    func reloadPreview() {
-        guard isPreviewVisible, let previewPane else { return }
-        guard let site, let page = markdownDocument?.fileURL else {
-            previewPane.showMessage(markdownDocument?.fileURL == nil
-                ? "Save this note to preview it."
-                : "The preview pane shows a page the way its Hugo site renders it.\nThis note isn’t in a Hugo site’s content folder.")
-            return
+        var dirty = IndexSet(integersIn: dirtyRange.location..<NSMaxRange(dirtyRange))
+        for r in previouslyRevealed + styler.revealed.map({ styler.elements[$0].range })
+            where NSMaxRange(r) <= ns.length {
+            let p = ns.paragraphRange(for: r)
+            dirty.insert(integersIn: p.location..<NSMaxRange(p))
         }
-        guard Self.isTrusted(site) else {
-            previewPane.showMessage("The preview needs permission to run this site’s build.")
-            askToTrust(site) { [weak self] in self?.reloadPreview() }
-            return
+        for r in dirty.rangeView {
+            styler.apply(to: storage, in: NSRange(location: r.lowerBound, length: r.count))
         }
-        previewPane.showMessage("Starting hugo server…")
-        markdownDocument?.autosave(withImplicitCancellability: false) { _ in }
-        HugoPreview.shared.url(of: page, in: site) { [weak self] url, output in
-            guard let self, self.isPreviewVisible else { return }
-            if let url {
-                self.previewPane.show(url)
-            } else {
-                let m = HugoPreview.failureMessage(output)
-                self.previewPane.showMessage(m.title + "\n\n" + m.detail)
-            }
-        }
-    }
-
-    /// Save soon after typing so hugo server rebuilds and the pane live-reloads.
-    private func schedulePreviewSave() {
-        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(savePreview), object: nil)
-        perform(#selector(savePreview), with: nil, afterDelay: 0.6)
-    }
-
-    @objc private func savePreview() {
-        guard isPreviewVisible, let doc = markdownDocument, doc.fileURL != nil, doc.isDocumentEdited else { return }
-        doc.autosave(withImplicitCancellability: false) { _ in }
-    }
-
-    @objc private func editorScrolled(_ note: Notification) {
-        guard isPreviewVisible, let tv = textView, let clip = tv.enclosingScrollView?.contentView else { return }
-        let range = tv.frame.height - clip.bounds.height
-        previewPane.scroll(toFraction: range > 0 ? clip.bounds.minY / range : 0)
+        updateStatus(textChanged: true)
     }
 
     func textDidChange(_ notification: Notification) {
         if isPreviewVisible { schedulePreviewSave() }
-        restyleAll()
+        restyleAfterEdit()
+        updateCompletion()
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
         if !parseIsStale { updateStatus(textChanged: false) }
+        if !parseIsStale, completionVisible { updateCompletion() }
         guard !parseIsStale, !styler.sourceMode else { return }
         let new = styler.revealedElements(for: selection)
         let changed = new.symmetricDifference(styler.revealed)
         guard !changed.isEmpty else { return }
         styler.revealed = new
 
-        let ns = storage.string as NSString
+        let ns = storage.mutableString as NSString
         var dirty = IndexSet()
         for i in changed where i < styler.elements.count {
             let r = styler.elements[i].range
@@ -334,199 +347,24 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
 
     // MARK: - Window
 
+    func windowDidResignKey(_ notification: Notification) {
+        hideCompletion()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        hideCompletion()
+        watcher = nil
+        // Stop hugo server when the last window of its site closes.
+        if let site {
+            let others = NSDocumentController.shared.documents.compactMap { ($0 as? MarkdownDocument)?.editor }
+                .filter { $0 !== self && $0.site?.root == site.root }
+            if others.isEmpty { HugoPreview.shared.stop(site) }
+        }
+    }
+
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
         (document as? NSDocument)?.undoManager
     }
 
-    // MARK: - Elements under the mouse
-
-    func linkElement(at point: NSPoint) -> MDElement? {
-        guard !parseIsStale, let ci = textView.characterIndex(onGlyphAt: point) else { return nil }
-        return styler.elements.first { $0.link != nil && $0.range.containsIndex(ci) }
-            ?? styler.elements.first { $0.image != nil && $0.range.containsIndex(ci) }.flatMap(imageAsLink)
-    }
-
-    /// ⌘-clicking an image opens the image file.
-    private func imageAsLink(_ e: MDElement) -> MDElement? {
-        guard let img = e.image else { return nil }
-        var copy = e
-        copy.kind = .link(MDLink(style: img.isWiki ? .embed : .markdown, target: img.source,
-                                 heading: nil, targetRange: img.targetRange))
-        return copy
-    }
-
-    func taskElement(at point: NSPoint) -> MDElement? {
-        guard !parseIsStale, !styler.sourceMode, let ci = textView.characterIndex(onGlyphAt: point),
-              storage.attribute(.sdTask, at: ci, effectiveRange: nil) != nil else { return nil }
-        return styler.elements.first {
-            if case .task = $0.kind { return $0.marker.containsIndex(ci) }
-            return false
-        }
-    }
-
-    func toggleTask(_ e: MDElement) {
-        guard case .task(let checked) = e.kind else { return }
-        let r = NSRange(location: e.marker.location + 1, length: 1)
-        replace(r, with: checked ? " " : "x", actionName: checked ? "Uncheck Task" : "Check Task")
-    }
-
-    func replace(_ r: NSRange, with s: String, actionName: String) {
-        guard NSMaxRange(r) <= storage.length else { return }
-        if textView.shouldChangeText(in: r, replacementString: s) {
-            storage.replaceCharacters(in: r, with: s)
-            textView.didChangeText()
-            textView.undoManager?.setActionName(actionName)
-        }
-    }
-
-    // MARK: - Following links
-
-    func follow(_ e: MDElement) {
-        guard let link = e.link else { return }
-        let context = linkContext
-        let target = LinkContext.fileTarget(of: link)
-        let heading = LinkContext.heading(of: link)
-
-        if context.isExternal(link) {
-            openExternal(target)
-            return
-        }
-        if target.isEmpty {
-            if let heading { reveal(heading: heading) }
-            return
-        }
-        guard let base = context.baseDirectory else {
-            let alert = NSAlert()
-            alert.messageText = "Save this note first"
-            alert.informativeText = "Links are looked up relative to the folder the note is saved in."
-            alert.beginSheetModal(for: window!)
-            return
-        }
-        if let url = context.resolve(link) {
-            openTarget(url, heading: heading)
-        } else {
-            askAboutMissing(target: target, link: link, base: site?.contentDir ?? base, heading: heading)
-        }
-    }
-
-    /// Notes open in Slopdown; anything else goes through the safety rules.
-    func openTarget(_ url: URL, heading: String? = nil) {
-        if LinkResolver.isMarkdownFile(url) { Self.open(url, heading: heading) } else { openLocalFile(url) }
-    }
-
-    /// Opens a markdown/text note in its own window.
-    static func open(_ url: URL, heading: String? = nil) {
-        guard LinkResolver.isMarkdownFile(url) else { return }
-        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { doc, _, error in
-            if let error {
-                NSApp.presentError(error)
-                return
-            }
-            if let heading, let editor = (doc as? MarkdownDocument)?.editor {
-                editor.reveal(heading: heading)
-            }
-        }
-    }
-
-    private func askAboutMissing(target: String, link: MDLink, base: URL, heading: String?) {
-        guard let window else { return }
-        let alert = NSAlert()
-        alert.messageText = "“\(target)” doesn’t exist"
-        var info = site == nil
-            ? "No matching file in “\(base.lastPathComponent)” or its subfolders."
-            : "No page with this path in the site’s “\(base.lastPathComponent)” folder."
-        if let newURL = linkContext.newFileURL(for: link) {
-            info += "\n\nA new file would be created at:\n" + (newURL.path as NSString).abbreviatingWithTildeInPath
-            if !LinkSafety.isInside(newURL, creationRoot) {
-                info += "\n\n⚠︎ That is outside “\(creationRoot.lastPathComponent)”."
-            }
-        }
-        alert.informativeText = info
-        alert.addButton(withTitle: site == nil ? "Create New File" : "Create New Page")
-        alert.addButton(withTitle: "Choose File…")
-        alert.addButton(withTitle: "Cancel")
-        alert.beginSheetModal(for: window) { [weak self] response in
-            guard let self else { return }
-            switch response {
-            case .alertFirstButtonReturn:
-                self.createFile(for: link)
-            case .alertSecondButtonReturn:
-                DispatchQueue.main.async { self.chooseFile(for: link, base: base, heading: heading) }
-            default:
-                break
-            }
-        }
-    }
-
-    /// New files from links belong here: the note's folder, or the site's content folder.
-    var creationRoot: URL {
-        site?.contentDir ?? markdownDocument?.fileURL?.deletingLastPathComponent() ?? URL(fileURLWithPath: NSHomeDirectory())
-    }
-
-    private func createFile(for link: MDLink) {
-        let context = linkContext
-        guard let url = context.newFileURL(for: link) else { return }
-        let create = { self.createAndOpen(url, contents: context.newFileContents(for: url)) }
-        guard LinkSafety.isInside(url, creationRoot) else {
-            // A link like [[../../Library/x]] must not quietly create files elsewhere.
-            confirm(title: "Create a file outside “\(creationRoot.lastPathComponent)”?",
-                    detail: "The link points outside the note’s folder. The file would be created at:\n\n"
-                        + (url.path as NSString).abbreviatingWithTildeInPath,
-                    button: "Create File", perform: create)
-            return
-        }
-        create()
-    }
-
-    func createAndOpen(_ url: URL, contents: String) {
-        let fm = FileManager.default
-        do {
-            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if !fm.fileExists(atPath: url.path) {
-                try Data(contents.utf8).write(to: url, options: .withoutOverwriting)
-            }
-            styler.resolutions.invalidate()
-            restyleAll()   // the link is no longer "unresolved"
-            openTarget(url)
-        } catch {
-            NSApp.presentError(error)
-        }
-    }
-
-    private func chooseFile(for link: MDLink, base: URL, heading: String?) {
-        guard let window else { return }
-        let panel = NSOpenPanel()
-        panel.directoryURL = base
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = "Choose the file this link should point to"
-        panel.prompt = "Link"
-        panel.beginSheetModal(for: window) { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
-            if let newTarget = self.linkContext.retarget(link, to: url) {
-                self.replace(link.targetRange, with: newTarget, actionName: "Change Link")
-            }
-            self.openTarget(url, heading: heading)
-        }
-    }
-
-    // MARK: - Headings
-
-    func reveal(heading: String) {
-        let ns = storage.string as NSString
-        let wanted = heading.trimmingCharacters(in: .whitespaces).lowercased()
-        for e in styler.elements {
-            guard case .heading = e.kind else { continue }
-            let text = ns.substring(with: e.content).trimmingCharacters(in: .whitespaces).lowercased()
-            if text == wanted {
-                textView.setSelectedRange(NSRange(location: e.content.location, length: 0))
-                textView.scrollRangeToVisible(e.range)
-                window?.makeKeyAndOrderFront(nil)
-                return
-            }
-        }
-        NSSound.beep()
-    }
 }
 #endif

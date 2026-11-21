@@ -19,9 +19,15 @@ enum Autotest {
     }
 
     static func run() {
-        let files = (ProcessInfo.processInfo.environment["SLOPDOWN_AUTOTEST"] ?? "")
+        var files = (ProcessInfo.processInfo.environment["SLOPDOWN_AUTOTEST"] ?? "")
             .split(separator: ":").map { URL(fileURLWithPath: String($0)) }
         try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+        // A long note for the typing speed test
+        var big = ""
+        for i in 0..<2500 { big += "## Section \(i)\n\nText with **bold**, *italic*, [[link \(i)]] and `code` here.\n- item\n\n" }
+        let bigURL = outDir.appendingPathComponent("Big.md")
+        try? big.write(to: bigURL, atomically: true, encoding: .utf8)
+        files.append(bigURL)
         log("autotest: \(files.count) file(s) → \(outDir.path)")
         step(files, 0)
     }
@@ -41,11 +47,12 @@ enum Autotest {
             }
             editor.window?.setFrame(NSRect(x: 40, y: 40, width: 900, height: 1000), display: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                capture(editor, name: url.deletingPathExtension().lastPathComponent)
                 let next = {
                     doc?.close()
                     step(files, i + 1)
                 }
+                if url.lastPathComponent == "Big.md" { typingSpeedTest(editor); next(); return }
+                capture(editor, name: url.deletingPathExtension().lastPathComponent)
                 if url.path.contains("hugo-site") { hugoTest(editor, done: next) } else { next() }
             }
         }
@@ -157,11 +164,22 @@ enum Autotest {
         check("hugo-cmdK", added1 == "[]({{< relref \"\" >}})", added1.debugDescription)
         editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
 
-        // Link to page
+        // Completion of a relref path, then accepting it
         tv.setSelectedRange(NSRange(location: end, length: 0))
-        editor.insertPageLink(to: site.contentDir.appendingPathComponent("posts/second/index.md"))
+        editor.replace(NSRange(location: end, length: 0), with: "\n[x]({{< relref \"sec", actionName: "")
+        tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+        editor.updateCompletion()
+        let first = editor.completionItems.first
+        check("hugo-complete", first?.insert == "/posts/second" && first?.title == "Second Post",
+              String(describing: first))
+        editor.acceptCompletion()
         let added2 = (tv.string as NSString).substring(from: end)
-        check("hugo-pagelink", added2 == "[Second Post]({{< relref \"/posts/second\" >}})", added2.debugDescription)
+        check("hugo-complete-accept", added2 == "\n[x]({{< relref \"/posts/second\"", added2.debugDescription)
+        editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
+
+        // Pasting an image into a non-bundle page goes to static/images
+        let pasted = pasteImageTest(editor, expectPrefix: "![](/images/pasted-image-")
+        check("hugo-paste", pasted, "")
         editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
         check("hugo-restored", tv.string == original)
 
@@ -265,6 +283,41 @@ enum Autotest {
         }
     }
 
+    /// Puts a PNG on the pasteboard, pastes, checks the file and the link, removes the file.
+    private static func pasteImageTest(_ editor: EditorWindowController, expectPrefix: String) -> Bool {
+        guard let tv = editor.textView, let doc = editor.markdownDocument?.fileURL else { return false }
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8, bitsPerSample: 8,
+                                   samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                   bytesPerRow: 0, bitsPerPixel: 0)!
+        let png = rep.representation(using: .png, properties: [:])!
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(png, forType: .png)
+        let end = (tv.string as NSString).length
+        tv.setSelectedRange(NSRange(location: end, length: 0))
+        tv.paste(nil)
+        let added = (tv.string as NSString).substring(from: end)
+        let folder = Attachments.folder(for: doc, site: editor.site)
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?.filter { $0.hasPrefix("pasted-image-") } ?? []
+        log("paste → \(added.debugDescription), files \(files)")
+        for f in files { try? FileManager.default.removeItem(at: folder.appendingPathComponent(f)) }
+        pb.clearContents()
+        return added.hasPrefix(expectPrefix) && files.count == 1
+    }
+
+    /// Typing in a long document: one keystroke must stay fast (incremental restyle).
+    static func typingSpeedTest(_ editor: EditorWindowController) {
+        guard let tv = editor.textView else { return }
+        let mid = (tv.string as NSString).length / 2
+        var worst = 0.0
+        for k in 0..<5 {
+            let t = Date()
+            editor.replace(NSRange(location: mid + k, length: 0), with: "q", actionName: "")
+            worst = max(worst, Date().timeIntervalSince(t))
+        }
+        check("typing-speed", worst < 0.06, "\((tv.string as NSString).length) chars, worst keystroke \(Int(worst * 1000)) ms")
+    }
+
     /// Formatting commands round-trip (toggle twice = original) and the status bar.
     private static func formattingTest(_ editor: EditorWindowController) {
         guard let tv = editor.textView else { return }
@@ -324,6 +377,23 @@ enum Autotest {
         check("safety-render", !LinkSafety.isRenderable(URL(fileURLWithPath: home + "/.ssh/id_rsa"))
               && LinkSafety.isRenderable(URL(fileURLWithPath: home + "/Notes/a.png")))
         check("safety-url", LinkSafety.action(forURL: "ssh://x") == .confirm && LinkSafety.action(forURL: "https://x") == .open)
+
+        // Link completion
+        let before = tv.string
+        let endW = (before as NSString).length
+        editor.replace(NSRange(location: endW, length: 0), with: "\n[[seco", actionName: "")
+        tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+        editor.updateCompletion()
+        check("complete-list", editor.completionVisible && editor.completionItems.first?.insert == "Second Note",
+              String(describing: editor.completionItems.first))
+        editor.acceptCompletion()
+        check("complete-accept", tv.string.hasSuffix("\n[[Second Note]]"), String(tv.string.suffix(30)).debugDescription)
+        check("complete-closed", !editor.completionVisible)
+        editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: before, actionName: "")
+
+        // Pasting an image saves it next to the note
+        check("paste", pasteImageTest(editor, expectPrefix: "![[pasted-image-"))
+        editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: before, actionName: "")
 
         let info = editor.statusBar?.infoLabel.stringValue ?? ""
         check("statusbar", info.contains("words") && info.contains("Ln "), info.debugDescription)

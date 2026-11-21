@@ -112,8 +112,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fmt("Link", #selector(EditorWindowController.formatLink(_:)), "k")
         fmt("Wiki Link", #selector(EditorWindowController.formatWikiLink(_:)), "K")
         fmt("Embed", #selector(EditorWindowController.formatEmbed(_:)), "E")
-        fmt("Link to Note…", #selector(EditorWindowController.linkToPage(_:)), "k", [.command, .option])
-        fmt("Insert Image…", #selector(EditorWindowController.insertImage(_:)), "i", [.command, .option])
         format.addItem(.separator())
         fmt("Paragraph", #selector(EditorWindowController.formatHeading(_:)), "0", tag: 0)
         for level in 1...6 {

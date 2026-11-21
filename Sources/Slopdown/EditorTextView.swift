@@ -118,6 +118,52 @@ final class EditorTextView: NSTextView {
         return ci < ts.length ? ci : nil
     }
 
+    // MARK: - Completion keys
+
+    override func doCommand(by selector: Selector) {
+        if let editor, editor.completionVisible {
+            switch selector {
+            case #selector(moveUp(_:)): editor.moveCompletion(-1); return
+            case #selector(moveDown(_:)): editor.moveCompletion(1); return
+            case #selector(insertNewline(_:)), #selector(insertTab(_:)): editor.acceptCompletion(); return
+            case #selector(cancelOperation(_:)): editor.hideCompletion(); return
+            default: break
+            }
+        }
+        super.doCommand(by: selector)
+    }
+
+    // MARK: - Pasting and dropping images
+
+    override func paste(_ sender: Any?) {
+        if editor?.importImages(from: .general) == true { return }
+        super.paste(sender)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if editor?.hasImages(sender.draggingPasteboard) == true { return .copy }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if editor?.hasImages(sender.draggingPasteboard) == true {
+            let p = convert(sender.draggingLocation, from: nil)
+            setSelectedRange(NSRange(location: characterIndexForInsertion(at: p), length: 0))
+            return .copy
+        }
+        return super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if let editor, editor.hasImages(sender.draggingPasteboard) {
+            let p = convert(sender.draggingLocation, from: nil)
+            setSelectedRange(NSRange(location: characterIndexForInsertion(at: p), length: 0))
+            window?.makeFirstResponder(self)
+            return editor.importImages(from: sender.draggingPasteboard)
+        }
+        return super.performDragOperation(sender)
+    }
+
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         if let editor {
