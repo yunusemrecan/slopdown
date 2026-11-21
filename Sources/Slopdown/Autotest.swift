@@ -250,11 +250,28 @@ enum Autotest {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     let still = pane.webView.url?.absoluteString ?? ""
                     check("pane-stays-local", PreviewPane.isLocalServer(pane.webView.url), still)
+                    // Scroll the editor so "## Beta" is at the top; the page should follow.
+                    if let lm = tv.layoutManager, let scroll = tv.enclosingScrollView {
+                        let at = (tv.string as NSString).range(of: "## Beta").location
+                        let y = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: at), effectiveRange: nil).minY
+                            + tv.textContainerOrigin.y
+                        scroll.contentView.scroll(to: NSPoint(x: 0, y: y - 2))
+                        scroll.reflectScrolledClipView(scroll.contentView)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    pane.webView.evaluateJavaScript("""
+                        (() => { const h = [...document.querySelectorAll('h2')].find(h => h.textContent.trim() == 'Beta');
+                                 return h ? Math.round(h.getBoundingClientRect().top) : 9999 })()
+                        """) { top, _ in
+                        let px = (top as? Int) ?? 9999
+                        check("pane-heading-sync", abs(px) < 40, "Beta heading at \(px) px from the top of the pane")
                     paneSnapshot(editor) {
                         editor.replace(NSRange(location: 0, length: (tv.string as NSString).length), with: original, actionName: "")
                         editor.markdownDocument?.autosave(withImplicitCancellability: false) { _ in
                             DispatchQueue.main.async { finish() }
                         }
+                    }
+                    }
                     }
                     }
                 }

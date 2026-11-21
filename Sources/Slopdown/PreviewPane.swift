@@ -6,6 +6,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import SlopdownCore
 import WebKit
 
 final class PreviewPane: NSView, WKNavigationDelegate {
@@ -19,6 +20,8 @@ final class PreviewPane: NSView, WKNavigationDelegate {
     override init(frame: NSRect) {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
+        config.userContentController.addUserScript(
+            WKUserScript(source: HeadingSync.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         webView = WKWebView(frame: NSRect(origin: .zero, size: frame.size), configuration: config)
         super.init(frame: frame)
         webView.autoresizingMask = [.width, .height]
@@ -59,17 +62,39 @@ final class PreviewPane: NSView, WKNavigationDelegate {
         webView.load(URLRequest(url: url))
     }
 
+    /// Where the editor is: a heading and how far past it, or just a fraction of the note.
+    enum Anchor: Equatable {
+        case fraction(CGFloat)
+        case heading(title: String, occurrence: Int, count: Int, fraction: CGFloat, before: Bool)
+    }
+    private(set) var anchor: Anchor = .fraction(0)
+
     /// Scroll the page to the same relative position as the editor (0…1).
     func scroll(toFraction f: CGFloat) {
-        scrollFraction = max(0, min(1, f))
-        let js = "window.scrollTo(0, \(scrollFraction) * Math.max(0, document.documentElement.scrollHeight - window.innerHeight));"
-        webView.evaluateJavaScript(js, completionHandler: nil)
+        sync(.fraction(max(0, min(1, f))))
+    }
+
+    func sync(_ a: Anchor) {
+        anchor = a
+        switch a {
+        case .fraction(let f):
+            scrollFraction = f
+            let js = "window.scrollTo(0, \(f) * Math.max(0, document.documentElement.scrollHeight - window.innerHeight));"
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        case .heading(let title, let occurrence, let count, let fraction, let before):
+            // Arguments are passed as values, never spliced into the script.
+            webView.callAsyncJavaScript(
+                "return window.__slopdownSync ? window.__slopdownSync(title, occurrence, count, fraction, before) : false",
+                arguments: ["title": title, "occurrence": occurrence, "count": count,
+                            "fraction": Double(fraction), "before": before],
+                in: nil, in: .page, completionHandler: nil)
+        }
     }
 
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        scroll(toFraction: scrollFraction)   // also after live reloads
+        sync(anchor)   // also after live reloads
         onLoad?()
     }
 

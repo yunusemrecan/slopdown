@@ -15,6 +15,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate, NSText
     private let concealer = GlyphConcealer()
     let styler = MarkdownStyler()
     let completion = CompletionState()
+    /// Headings of the note for preview scrolling, with the parse they came from.
+    var headingCache: (generation: Int, list: [HeadingInfo]) = (-1, [])
     private var watcher: DirectoryWatcher?
 
     /// Characters changed but the parser has not run yet (element ranges are stale).

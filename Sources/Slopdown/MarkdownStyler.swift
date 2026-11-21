@@ -25,14 +25,19 @@ final class MarkdownStyler {
 
     // MARK: - Parsing
 
+    /// Bumped whenever `elements` changes (lets callers cache derived data).
+    private(set) var generation = 0
+
     func reparse(_ text: String) {
         elements = MarkdownParser.parse(text)
+        generation += 1
     }
 
     /// Incremental re-parse after an edit; returns the range whose elements changed.
     func update(_ text: String, editedRange: NSRange, delta: Int) -> NSRange {
         let u = MarkdownParser.update(elements, newText: text, editedRange: editedRange, delta: delta)
         elements = u.elements
+        generation += 1
         return u.dirty
     }
 

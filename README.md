@@ -191,6 +191,9 @@ note at several scroll positions into PNG files, run formatting and Hugo checks 
 a real `hugo server`), and quit. The images are uploaded as the `screenshots` artifact, and
 the screenshots in this README come from there.
 
+Things CI can't check (clicking, dragging, dialogs, how it feels) are in a checklist:
+[docs/manual-tests.md](docs/manual-tests.md).
+
 ## Project layout
 
 | Path | What |

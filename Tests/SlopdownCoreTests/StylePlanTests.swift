@@ -94,3 +94,13 @@ final class StylePlanTests: XCTestCase {
         XCTAssertEqual(s.filter { if case .tableDelimiter = $0.1 { return true }; return false }.count, 1)
     }
 }
+
+final class HeadingSyncTests: XCTestCase {
+    func testTitles() {
+        let t = "# The **Big** [[Note|Plan]]\ntext\n## Details ##\n## details\n# The Big Plan"
+        let h = HeadingSync.headings(MarkdownParser.parse(t), in: NSString(string: t))
+        XCTAssertEqual(h.map { $0.title }, ["the big plan", "details", "details", "the big plan"])
+        XCTAssertEqual(h.map { $0.occurrence }, [0, 0, 1, 1])
+        XCTAssertEqual(h.map { $0.count }, [2, 2, 2, 2])
+    }
+}
