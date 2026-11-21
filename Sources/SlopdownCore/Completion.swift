@@ -108,7 +108,8 @@ public enum Completion {
                              context: LinkContext, limit: Int = 40) -> [CompletionItem] {
         guard let doc = context.document, let base = context.baseDirectory else { return [] }
         let site = context.site
-        let root = site?.contentDir ?? base
+        let root = site?.contentRoot(for: doc) ?? base
+        let docLanguage = site.map { $0.language(of: doc) }
 
         // Wiki links use the shortest unique name, like Obsidian.
         var nameCount: [String: Int] = [:]
@@ -120,6 +121,8 @@ public enum Completion {
         var scored: [(score: Int, item: CompletionItem)] = []
         for p in pages where p.url != doc.standardizedFileURL {
             let isImage = MarkdownParser.imageExtensions.contains(p.url.pathExtension.lowercased())
+            // Multilingual Hugo: offer pages in the note's language only.
+            if let site, site.isMultilingual, !isImage, site.language(of: p.url) != docLanguage { continue }
             let insert: String
             switch kind {
             case .wiki:

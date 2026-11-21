@@ -62,6 +62,43 @@ public struct HugoSite: Equatable {
     public var hasLinkRenderHook: Bool
     /// `baseURL` from the config (used to turn permalinks into server paths).
     public var baseURL: String? = nil
+    /// Language codes from `[languages.xx]`; empty or one entry: a single-language site.
+    public var languages: [String] = []
+    public var defaultLanguage = "en"
+    /// Languages with their own content folder (`contentDir` inside `[languages.xx]`).
+    public var languageContentDirs: [String: URL] = [:]
+
+    public var isMultilingual: Bool { languages.count > 1 }
+
+    /// Every content folder: the main one and per-language ones.
+    public var contentDirs: [URL] {
+        var dirs = [contentDir]
+        for code in languages { if let d = languageContentDirs[code], !dirs.contains(d) { dirs.append(d) } }
+        return dirs
+    }
+
+    /// The content folder a file lives in (the most specific one).
+    public func contentRoot(for file: URL) -> URL {
+        contentDirs.filter { LinkSafety.isInside(file, $0) }.max { $0.path.count < $1.path.count } ?? contentDir
+    }
+
+    /// `post.tr.md` → "tr"; a file in a language's content folder → that language.
+    public func language(of file: URL) -> String {
+        if let suffix = languageSuffix(file.deletingPathExtension().lastPathComponent) { return suffix }
+        let root = contentRoot(for: file)
+        return languageContentDirs.first { $0.value == root }?.key ?? defaultLanguage
+    }
+
+    /// The language code at the end of a file name stem ("post.tr"), if it is one of the site's.
+    func languageSuffix(_ stem: String) -> String? {
+        guard isMultilingual else { return nil }
+        let ext = (stem as NSString).pathExtension
+        return languages.contains(ext) ? ext : nil
+    }
+
+    func stripLanguage(_ stem: String) -> String {
+        languageSuffix(stem) != nil ? (stem as NSString).deletingPathExtension : stem
+    }
     /// What the project itself does (from its content files).
     public var detected: HugoConventions
 
@@ -76,8 +113,8 @@ public struct HugoSite: Equatable {
         for _ in 0..<12 {
             if let site = at(dir, fileManager: fm) {
                 // The note must be inside the content folder to count as a site page.
-                let path = file.standardizedFileURL.path
-                return path.hasPrefix(site.contentDir.path + "/") ? site : nil
+                return site.contentDirs.contains { LinkSafety.isInside(file, $0) && file.standardizedFileURL != $0 }
+                    ? site : nil
             }
             let parent = dir.deletingLastPathComponent()
             if parent.path == dir.path { break }
@@ -126,8 +163,64 @@ public struct HugoSite: Equatable {
                             hasLinkRenderHook: hookInConfig || hookTemplate,
                             detected: HugoConventions(style: .relref))
         site.baseURL = setting("baseURL")
+        let langs = parseLanguages(config, root: dir.standardizedFileURL)
+        site.languages = langs.codes
+        site.languageContentDirs = langs.dirs
+        site.defaultLanguage = setting("defaultContentLanguage") ?? langs.codes.first ?? "en"
         site.detected = site.detectConventions(fileManager: fm)
         return site
+    }
+
+    /// Languages and their content folders, from TOML `[languages.xx]` tables or a YAML
+    /// `languages:` map.
+    static func parseLanguages(_ config: String, root: URL) -> (codes: [String], dirs: [String: URL]) {
+        var codes: [String] = []
+        var dirs: [String: URL] = [:]
+        let lines = config.components(separatedBy: .newlines)
+        let tomlHeader = try! NSRegularExpression(pattern: #"^\s*\[\s*languages\.([A-Za-z0-9_-]+)\s*\]\s*$"#)
+        let anyHeader = try! NSRegularExpression(pattern: #"^\s*\["#)
+        let dirLine = try! NSRegularExpression(pattern: #"^\s*contentDir\s*[=:]\s*["']?([^"'\n#]+?)["']?\s*$"#)
+        func first(_ re: NSRegularExpression, _ l: String) -> String? {
+            guard let m = re.firstMatch(in: l, range: NSRange(location: 0, length: (l as NSString).length)) else { return nil }
+            return m.numberOfRanges > 1 ? (l as NSString).substring(with: m.range(at: 1)) : ""
+        }
+        // TOML
+        var current: String? = nil
+        for l in lines {
+            if let code = first(tomlHeader, l) {
+                current = code
+                if !codes.contains(code) { codes.append(code) }
+            } else if first(anyHeader, l) != nil {
+                current = nil
+            } else if let code = current, let d = first(dirLine, l) {
+                dirs[code] = root.appendingPathComponent(d).standardizedFileURL
+            }
+        }
+        if !codes.isEmpty { return (codes, dirs) }
+        // YAML
+        var inLanguages = false
+        var keyIndent: Int? = nil
+        current = nil
+        for l in lines {
+            let indent = l.prefix(while: { $0 == " " }).count
+            let t = l.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty || t.hasPrefix("#") { continue }
+            if indent == 0 {
+                inLanguages = t == "languages:"
+                keyIndent = nil
+                continue
+            }
+            guard inLanguages else { continue }
+            if keyIndent == nil { keyIndent = indent }
+            if indent == keyIndent, t.hasSuffix(":") {
+                let code = String(t.dropLast())
+                current = code
+                if !codes.contains(code) { codes.append(code) }
+            } else if indent > (keyIndent ?? 0), let code = current, let d = first(dirLine, l) {
+                dirs[code] = root.appendingPathComponent(d).standardizedFileURL
+            }
+        }
+        return (codes, dirs)
     }
 
     // MARK: - Conventions used by the project
@@ -177,8 +270,12 @@ public struct HugoSite: Equatable {
 
     /// `content/posts/foo.md` → `/posts/foo`; bundles (`foo/index.md`, `_index.md`) → their folder.
     public func logicalPath(of file: URL) -> String {
-        var rel = relative(file.standardizedFileURL, to: contentDir)
+        var rel = relative(file.standardizedFileURL, to: contentRoot(for: file))
         rel = (rel as NSString).deletingPathExtension
+        // Translations by file name share the path: post.tr.md → /post
+        let dir = (rel as NSString).deletingLastPathComponent
+        let stem = stripLanguage((rel as NSString).lastPathComponent)
+        rel = dir.isEmpty ? stem : dir + "/" + stem
         let last = (rel as NSString).lastPathComponent
         if last == "index" || last == "_index" { rel = (rel as NSString).deletingLastPathComponent }
         return "/" + rel
@@ -203,20 +300,28 @@ public struct HugoSite: Equatable {
             var d: ObjCBool = false
             return fm.fileExists(atPath: u.path, isDirectory: &d) && !d.boolValue
         }
+        // In a multilingual site, the page in the note's own language comes first.
+        let lang: String? = isMultilingual ? language(of: document) : nil
         func candidates(_ p: String) -> [String] {
             if (p as NSString).pathExtension.lowercased() == "md" { return [p] }
-            return [p + ".md", p + "/index.md", p + "/_index.md", p]
+            var c: [String] = []
+            if let lang { c += [p + ".\(lang).md", p + "/index.\(lang).md", p + "/_index.\(lang).md"] }
+            return c + [p + ".md", p + "/index.md", p + "/_index.md", p]
         }
         let docDir = document.deletingLastPathComponent()
+        let root = contentRoot(for: document)
         let bases: [URL]
         var path = t
         if t.hasPrefix("/") {
             path = String(t.dropFirst())
-            bases = [contentDir]
+            bases = [root] + contentDirs.filter { $0 != root }
         } else {
-            bases = [docDir, docDir.deletingLastPathComponent(), contentDir]
+            bases = [docDir, docDir.deletingLastPathComponent(), root]
         }
-        if path.isEmpty { return isFile(contentDir.appendingPathComponent("_index.md")) ? contentDir.appendingPathComponent("_index.md") : nil }
+        if path.isEmpty {
+            let home = ((lang.map { ["_index.\($0).md"] } ?? []) + ["_index.md"]).map { root.appendingPathComponent($0) }
+            return home.first(where: isFile)
+        }
         for base in bases {
             for c in candidates(path) {
                 let u = base.appendingPathComponent(c).standardizedFileURL
@@ -225,7 +330,7 @@ public struct HugoSite: Equatable {
         }
         // By name anywhere in the content folder
         for c in candidates(path) {
-            if let u = LinkResolver.resolve(target: c, relativeTo: contentDir, fileManager: fm) { return u }
+            if let u = LinkResolver.resolve(target: c, relativeTo: root, fileManager: fm) { return u }
         }
         return nil
     }
@@ -255,14 +360,14 @@ public struct HugoSite: Equatable {
         case .relativeFile:
             return encode(LinkResolver.relativePath(from: document.deletingLastPathComponent(), to: file))
         case .relref, .ref:
-            let arg = c.refUsesFiles ? "/" + relative(file.standardizedFileURL, to: contentDir) : logicalPath(of: file)
+            let arg = c.refUsesFiles ? "/" + relative(file.standardizedFileURL, to: contentRoot(for: file)) : logicalPath(of: file)
             return shortcode(c.style, arg, c)
         }
     }
 
     /// Argument of a ref/relref shortcode for `file` (used when rewriting an existing one).
     public func refArgument(for file: URL, conventions c: HugoConventions) -> String {
-        c.refUsesFiles ? "/" + relative(file.standardizedFileURL, to: contentDir) : logicalPath(of: file)
+        c.refUsesFiles ? "/" + relative(file.standardizedFileURL, to: contentRoot(for: file)) : logicalPath(of: file)
     }
 
     public func shortcode(_ style: HugoLinkStyle, _ arg: String, _ c: HugoConventions) -> String {
@@ -354,8 +459,10 @@ public struct HugoSite: Equatable {
         var t = rawTarget.trimmingCharacters(in: .whitespaces)
         if let hash = t.firstIndex(of: "#") { t = String(t[..<hash]) }
         while t.count > 1 && t.hasSuffix("/") { t.removeLast() }
-        let name = (t as NSString).pathExtension.lowercased() == "md" ? t : t + ".md"
-        if name.hasPrefix("/") { return contentDir.appendingPathComponent(String(name.dropFirst())).standardizedFileURL }
+        // A translation by file name (post.tr.md) links to pages in the same language.
+        let suffix = languageSuffix(document.deletingPathExtension().lastPathComponent).map { ".\($0)" } ?? ""
+        let name = (t as NSString).pathExtension.lowercased() == "md" ? t : t + suffix + ".md"
+        if name.hasPrefix("/") { return contentRoot(for: document).appendingPathComponent(String(name.dropFirst())).standardizedFileURL }
         return document.deletingLastPathComponent().appendingPathComponent(name).standardizedFileURL
     }
 

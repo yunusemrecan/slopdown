@@ -74,7 +74,7 @@ extension EditorWindowController {
         if let url = context.resolve(link) {
             openTarget(url, heading: heading)
         } else {
-            askAboutMissing(target: target, link: link, base: site?.contentDir ?? base, heading: heading)
+            askAboutMissing(target: target, link: link, base: site?.contentRoot(for: base.appendingPathComponent("x")) ?? base, heading: heading)
         }
     }
 
@@ -129,7 +129,8 @@ extension EditorWindowController {
 
     /// New files from links belong here: the note's folder, or the site's content folder.
     var creationRoot: URL {
-        site?.contentDir ?? markdownDocument?.fileURL?.deletingLastPathComponent() ?? URL(fileURLWithPath: NSHomeDirectory())
+        if let doc = markdownDocument?.fileURL { return site?.contentRoot(for: doc) ?? doc.deletingLastPathComponent() }
+        return URL(fileURLWithPath: NSHomeDirectory())
     }
 
     func createFile(for link: MDLink) {

@@ -167,7 +167,7 @@ extension EditorWindowController {
     /// ⌘P: notes in the folder (or the Hugo site's pages), by name or title.
     func quickOpenItems() -> [PickerItem] {
         guard let doc = markdownDocument?.fileURL else { return [] }
-        let root = site?.contentDir ?? doc.deletingLastPathComponent()
+        let root = site?.contentRoot(for: doc) ?? doc.deletingLastPathComponent()
         let me = doc.standardizedFileURL
         return completionPages(includeImages: false).filter { $0.url != me }.map { page in
             let name = page.url.deletingPathExtension().lastPathComponent

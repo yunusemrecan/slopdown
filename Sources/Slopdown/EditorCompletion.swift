@@ -135,7 +135,7 @@ extension EditorWindowController {
 
     func completionPages(includeImages: Bool) -> [PageEntry] {
         guard let doc = markdownDocument?.fileURL else { return [] }
-        let root = site?.contentDir ?? doc.deletingLastPathComponent()
+        let root = site?.contentRoot(for: doc) ?? doc.deletingLastPathComponent()
         let key = root.path + (includeImages ? "|img" : "")
         if let cached = completion.index[key] { return cached }
         let pages = Completion.index(root: root, includeImages: includeImages, readTitles: site != nil)

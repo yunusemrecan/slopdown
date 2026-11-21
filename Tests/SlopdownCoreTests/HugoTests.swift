@@ -196,3 +196,65 @@ final class HugoListTests: XCTestCase {
         XCTAssertEqual(paths["/site/content/_index.md"], "")
     }
 }
+
+final class HugoMultilingualTests: XCTestCase {
+    let fm = FileManager.default
+
+    private func site(_ files: [String: String]) throws -> URL {
+        let root = fm.temporaryDirectory.appendingPathComponent("ml-\(UUID().uuidString)")
+        for (p, t) in files {
+            let u = root.appendingPathComponent(p)
+            try fm.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try t.write(to: u, atomically: true, encoding: .utf8)
+        }
+        return root
+    }
+
+    func testTranslationsByFileName() throws {
+        let root = try site([
+            "hugo.toml": "baseURL = 'x'\ndefaultContentLanguage = 'en'\n[languages.en]\nweight = 1\n[languages.tr]\nweight = 2\n[languages.tr.params]\nx = 1\n",
+            "content/posts/a.md": "", "content/posts/a.tr.md": "", "content/posts/b.tr.md": "",
+            "content/posts/c/index.md": "", "content/posts/c/index.tr.md": "",
+        ])
+        defer { try? fm.removeItem(at: root) }
+        let aTr = root.appendingPathComponent("content/posts/a.tr.md")
+        let s = try XCTUnwrap(HugoSite.containing(aTr))
+        XCTAssertEqual(s.languages, ["en", "tr"])
+        XCTAssertTrue(s.isMultilingual)
+        XCTAssertEqual(s.language(of: aTr), "tr")
+        XCTAssertEqual(s.language(of: root.appendingPathComponent("content/posts/a.md")), "en")
+        XCTAssertEqual(s.logicalPath(of: aTr), "/posts/a")
+        XCTAssertEqual(s.logicalPath(of: root.appendingPathComponent("content/posts/c/index.tr.md")), "/posts/c")
+        // From a Turkish page, links go to the Turkish translation
+        XCTAssertEqual(s.resolvePage("/posts/c", from: aTr)?.lastPathComponent, "index.tr.md")
+        XCTAssertEqual(s.resolvePage("/posts/b", from: aTr)?.lastPathComponent, "b.tr.md")
+        let aEn = root.appendingPathComponent("content/posts/a.md")
+        XCTAssertEqual(s.resolvePage("/posts/c", from: aEn)?.lastPathComponent, "index.md")
+        // New pages keep the language
+        XCTAssertEqual(s.newPageURL(for: "/posts/new", from: aTr).lastPathComponent, "new.tr.md")
+        XCTAssertEqual(s.newPageURL(for: "/posts/new", from: aEn).lastPathComponent, "new.md")
+        // Completion offers only same-language pages, once each
+        let ctx = LinkContext(document: aTr, site: s)
+        let pages = Completion.index(root: s.contentRoot(for: aTr), includeImages: false, readTitles: false)
+        let items = Completion.items(for: .hugoRef, typed: "", pages: pages, context: ctx)
+        XCTAssertEqual(Set(items.map { $0.insert }), ["/posts/b", "/posts/c"])
+    }
+
+    func testContentDirPerLanguage() throws {
+        let root = try site([
+            "hugo.yaml": "baseURL: x\nlanguages:\n  en:\n    contentDir: content/en\n    weight: 1\n  tr:\n    contentDir: content/tr\n",
+            "content/en/posts/a.md": "", "content/tr/posts/a.md": "", "content/tr/about.md": "",
+        ])
+        defer { try? fm.removeItem(at: root) }
+        let trA = root.appendingPathComponent("content/tr/posts/a.md")
+        let s = try XCTUnwrap(HugoSite.containing(trA))
+        XCTAssertEqual(s.languages, ["en", "tr"])
+        XCTAssertEqual(s.language(of: trA), "tr")
+        XCTAssertEqual(s.contentRoot(for: trA).lastPathComponent, "tr")
+        XCTAssertEqual(s.logicalPath(of: trA), "/posts/a")
+        XCTAssertEqual(s.resolvePage("/about", from: trA)?.path,
+                       root.appendingPathComponent("content/tr/about.md").standardizedFileURL.path)
+        XCTAssertEqual(s.newPageURL(for: "/posts/new", from: trA).path,
+                       root.appendingPathComponent("content/tr/posts/new.md").standardizedFileURL.path)
+    }
+}
